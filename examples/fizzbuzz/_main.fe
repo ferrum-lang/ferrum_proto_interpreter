@@ -1,0 +1,24 @@
+fn main()
+	for n in 0..100
+		print("{fizzbuzz(n)}")
+	;
+;
+
+fn fizzbuzz(n: Int) -> String
+	let out = ""
+
+	if n % 3 == 0
+		out += "Fizz"
+	;
+
+	if n % 5 == 0
+		out += "Buzz"
+	;
+
+	if out.is_empty()
+		return n
+	else
+		return out
+	;
+;
+

@@ -1,0 +1,103 @@
+
+pub fn main(): !
+	let service = LocalUserService()
+
+	print(service)
+
+	const chester = service.create(User("chester@mail.com"))!
+	const snowy = service.create(User("snowy@mail.com"))!
+
+	print(service)
+
+	const chester = service.update(&chester.id, User("ChesterFields@mail.com"))!
+	const snowy = service.update(&snowy.id, User("SnowyAPI@mail.com"))!
+
+	print(service)
+
+	service.delete(&chester.id)!
+	service.delete(&snowy.id)!
+
+	print(service)
+;
+
+struct Record<T> {
+	id: Id,
+	value: T,
+}
+
+type Id = Int<$Min = 1>
+
+struct User {
+	email: String,
+}
+
+trait UserService
+	type Error
+	
+	!::Error = Self::Error
+
+	pub get_by_id(id: &Id): !Record<User>
+	pub get_all(): !List<Record<User>>
+	pub mut create(user: User): !Record<User>
+	pub mut update(id: &Id, user: User): !Record<User>
+	pub mut delete(id: &Id): !
+;
+
+enum LocalUserError {
+	UserNotFound,
+}
+
+struct LocalUserService {
+	next_id: Id = 1,
+
+	db: Map<Id, Record<User>> = ..,
+}
+
+impl
+	mut gen_id(): Id
+		const id = next_id
+		
+		next_id += 1
+		
+		return id
+	;
+;
+
+impl UserService
+	type Error = LocalUserError
+
+	pub get_by_id(id: &Id): !Record<User>
+		return db.get(id).clone()
+	;
+
+	pub get_all(): !List<Record<User>>
+		return db.values().cloned()
+	;
+
+	pub mut create(user: User): !Record<User>
+		const id = gen_id()
+		const record = Record(id.clone(), user)
+		
+		db.insert(id, record)
+	;
+
+	pub mut update(id: &Id, user: User): !Record<User>
+		let record = db.remove(id) else
+			return LocalUserError::UserNotFound
+		;
+		record.value = user
+
+		db.insert(id.clone(), record.clone())
+
+		return record
+	;
+
+	pub mut delete(id: &Id): !
+		const removed = db.remove(id)
+
+		if not removed
+			return LocalUserError::UserNotFound
+		;
+	;
+;
+
