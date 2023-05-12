@@ -50,7 +50,7 @@ pub struct Scanner {
 }
 
 impl Scanner {
-    pub fn new(source: String) -> Self {
+    pub fn from_source(source: String) -> Self {
         return Self {
             source,
 
@@ -173,7 +173,7 @@ impl Scanner {
             } else if self.match_next('>') {
                 token::TokenType::EqualGreater
             } else {
-                token::TokenType::Bang
+                token::TokenType::Equal
             }),
 
             '>' => Some(if self.match_next('>') {

@@ -1,7 +1,7 @@
 use super::*;
 
-use crate::interpreter::Interpreter;
-use crate::scanner::Scanner;
+use crate::parser;
+use crate::scanner;
 
 use std::fs;
 use std::path;
@@ -14,15 +14,16 @@ pub fn run(config: &Config) -> Result {
         .clone()
         .unwrap_or_else(|| String::from("./src/main.fe"));
 
-    let mut interpreter = Interpreter::new();
-
     let content = fs::read_to_string(path::PathBuf::from(entry_file))?;
-    dbg!(&content);
+    // dbg!(&content);
 
-    let scanner = Scanner::new(content);
-    let (tokens, error_ctx) = scanner.scan_tokens();
-
+    let (tokens, scan_error_ctx) = scanner::Scanner::from_source(content).scan_tokens();
     dbg!(&tokens);
+
+    let (ast, parse_error_ctx) = parser::Parser::from_tokens(tokens).parse_ast();
+    dbg!(&ast);
+
+    let error_ctx = ErrorContext::merge(vec![scan_error_ctx, parse_error_ctx]);
     dbg!(&error_ctx);
 
     return ok();
