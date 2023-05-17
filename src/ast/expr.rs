@@ -13,6 +13,8 @@ pub enum Expr {
     FormatString(FormatStringExpr),
     Logical(LogicalExpr),
     SelfVal(SelfValExpr),
+    Unary(UnaryExpr),
+    Binary(BinaryExpr),
 }
 
 impl Expr {
@@ -25,6 +27,8 @@ impl Expr {
             Self::FormatString(expr) => return expr.id,
             Self::Logical(expr) => return expr.id,
             Self::SelfVal(expr) => return expr.id,
+            Self::Unary(expr) => return expr.id,
+            Self::Binary(expr) => return expr.id,
         }
     }
 }
@@ -92,4 +96,39 @@ pub struct LogicalExpr {
 pub struct SelfValExpr {
     pub id: ExprId,
     pub keyword: token::Token,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct UnaryExpr {
+    pub id: ExprId,
+    pub op: (UnaryOp, token::Token),
+    pub right: Box<Expr>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum UnaryOp {
+    Not,
+    Minus,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct BinaryExpr {
+    pub id: ExprId,
+    pub left: Box<Expr>,
+    pub op: (BinaryOp, token::Token),
+    pub right: Box<Expr>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum BinaryOp {
+    Plus,
+    Minus,
+    Divide,
+    Times,
+    NotEqual,
+    EqualEqual,
+    Greater,
+    GreaterEqual,
+    Less,
+    LessEqual,
 }

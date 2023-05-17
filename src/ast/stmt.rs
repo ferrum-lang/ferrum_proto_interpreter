@@ -2,17 +2,18 @@ use super::*;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Stmt {
-    Expression(ExpressionStmt),
-    Variable(VariableStmt),
+    Expr(ast::Expr),
+    Assignment(AssignmentStmt),
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct ExpressionStmt {
-    pub expr: Expr,
+pub struct AssignmentStmt {
+    pub lhs: AssignmentLHS,
+    pub value: ast::Expr,
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct VariableStmt {
-    pub name: token::Token,
-    pub initializer: Option<expr::Expr>,
+pub enum AssignmentLHS {
+    Identity(ast::IdentityExpr),
+    Get(ast::GetExpr),
 }

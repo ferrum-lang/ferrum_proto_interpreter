@@ -18,7 +18,7 @@ pub fn run(config: &Config) -> Result {
     // dbg!(&content);
 
     let (tokens, scan_error_ctx) = scanner::Scanner::from_source(content).scan_tokens();
-    dbg!(&tokens);
+    // dbg!(&tokens);
 
     let (ast, parse_error_ctx) = parser::Parser::from_tokens(tokens).parse_ast();
     dbg!(&ast);
