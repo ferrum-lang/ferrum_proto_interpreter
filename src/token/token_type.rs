@@ -100,13 +100,16 @@ pub enum TokenType {
     Mut,
     Or,
     Pub,
+    Pure,
     Return,
+    Safe,
     SelfVal,  // self
     SelfType, // Self
     Struct,
     Trait,
     True,
     Type,
+    Unsafe,
     Use,
     While,
     Yield,

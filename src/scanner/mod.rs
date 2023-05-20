@@ -23,13 +23,16 @@ lazy_static::lazy_static! {
         keywords.insert("mut".to_string(), token::TokenType::Mut);
         keywords.insert("or".to_string(), token::TokenType::Or);
         keywords.insert("pub".to_string(), token::TokenType::Pub);
+        keywords.insert("pure".to_string(), token::TokenType::Pure);
         keywords.insert("return".to_string(), token::TokenType::Return);
+        keywords.insert("safe".to_string(), token::TokenType::Safe);
         keywords.insert("self".to_string(), token::TokenType::SelfVal);
         keywords.insert("Self".to_string(), token::TokenType::SelfType);
         keywords.insert("struct".to_string(), token::TokenType::Struct);
         keywords.insert("trait".to_string(), token::TokenType::Trait);
         keywords.insert("true".to_string(), token::TokenType::True);
         keywords.insert("type".to_string(), token::TokenType::Type);
+        keywords.insert("unsafe".to_string(), token::TokenType::Unsafe);
         keywords.insert("use".to_string(), token::TokenType::Use);
         keywords.insert("while".to_string(), token::TokenType::While);
         keywords.insert("yield".to_string(), token::TokenType::Yield);

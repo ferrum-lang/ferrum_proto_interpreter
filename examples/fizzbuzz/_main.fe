@@ -1,10 +1,12 @@
-fn main()
+use fe::print
+
+safe fn main()
 	for n in 0..100
 		print("{fizzbuzz(n)}")
 	;
 ;
 
-fn fizzbuzz(n: Int) -> String
+pure fn fizzbuzz(n: Int): String
 	let out = ""
 
 	if n % 3 == 0

@@ -48,6 +48,10 @@ impl Parser {
 
     fn declaration(&mut self) -> Option<ast::Decl> {
         let mut try_declaration = || {
+            if self.match_any(&[token::TokenType::Use]) {
+                return Ok(ast::Decl::Use(self.use_declaration()?));
+            }
+
             if self.match_any(&[token::TokenType::Struct]) {
                 return Ok(ast::Decl::Struct(self.struct_declaration()?));
             }
@@ -56,8 +60,25 @@ impl Parser {
                 // return Ok(ast::Decl::Impl);
             }
 
-            if self.match_any(&[token::TokenType::Fn]) {
-                return Ok(ast::Decl::Function(self.function()?));
+            {
+                let fn_mod = match self.peek().map(|t| &t.token_type) {
+                    Some(token::TokenType::Pure) => Some(ast::FnMod::Pure),
+                    Some(token::TokenType::Safe) => Some(ast::FnMod::Safe),
+                    Some(token::TokenType::Unsafe) => Some(ast::FnMod::Unsafe),
+                    _ => None,
+                };
+
+                let is_fn = if fn_mod.is_some() {
+                    let _ = self.advance();
+                    self.consume(&token::TokenType::Fn, "Expect some fn after fn modifier")?;
+                    true
+                } else {
+                    self.match_any(&[token::TokenType::Fn])
+                };
+
+                if is_fn {
+                    return Ok(ast::Decl::Function(self.function(fn_mod)?));
+                }
             }
 
             let t = self.peek().cloned().ok_or_else(|| self.eof_err())?;
@@ -73,6 +94,47 @@ impl Parser {
                 return None;
             }
         }
+    }
+
+    fn use_declaration(&mut self) -> Result<ast::UseDecl> {
+        let name = self.consume(&token::TokenType::Identifier, "Expect use name")?;
+        let mut path = ast::StaticUsePath {
+            name,
+            nexts: vec![],
+        };
+
+        while self.match_any(&[token::TokenType::ColonColon]) {
+            let nexts = match self.peek().cloned() {
+                Some(t) if t.token_type == token::TokenType::Identifier => {
+                    vec![self.use_declaration()?.path]
+                }
+                Some(t) if t.token_type == token::TokenType::LeftBrace => {
+                    let _ = self.advance();
+
+                    let mut nexts = vec![];
+
+                    while !self.match_any(&[token::TokenType::RightBrace]) {
+                        nexts.push(self.use_declaration()?.path);
+                    }
+
+                    nexts
+                }
+
+                Some(t)
+                    if t.token_type == token::TokenType::Newline
+                        || t.token_type == token::TokenType::EOF =>
+                {
+                    break;
+                }
+
+                Some(t) => return Err(self.error("Expect use name".to_string(), t)),
+                None => return Err(self.eof_err()),
+            };
+
+            path.nexts = nexts;
+        }
+
+        return Ok(ast::UseDecl { path });
     }
 
     fn struct_declaration(&mut self) -> Result<ast::StructDecl> {
@@ -139,7 +201,7 @@ impl Parser {
         return Ok(ast::StructDecl { name, fields });
     }
 
-    fn function(&mut self) -> Result<ast::FunctionDecl> {
+    fn function(&mut self, fn_mod: Option<ast::FnMod>) -> Result<ast::FunctionDecl> {
         let name = self.consume(&token::TokenType::Identifier, "Expect function name")?;
 
         self.consume(
@@ -197,7 +259,12 @@ impl Parser {
             "Expect newline after function body",
         )?;
 
-        return Ok(ast::FunctionDecl { name, params, body });
+        return Ok(ast::FunctionDecl {
+            fn_mod,
+            name,
+            params,
+            body,
+        });
     }
 
     fn statement(&mut self) -> Result<ast::Stmt> {
@@ -689,6 +756,9 @@ impl Parser {
                     token::TokenType::Const
                     | token::TokenType::For
                     | token::TokenType::Fn
+                    | token::TokenType::Pure
+                    | token::TokenType::Safe
+                    | token::TokenType::Unsafe
                     | token::TokenType::If
                     | token::TokenType::Impl
                     | token::TokenType::Match

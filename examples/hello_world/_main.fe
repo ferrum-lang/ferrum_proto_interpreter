@@ -1,4 +1,6 @@
-fn main()
+use fe::print
+
+safe fn main()
 	print("Hello {world}")
 
 	foo = -42 / 3

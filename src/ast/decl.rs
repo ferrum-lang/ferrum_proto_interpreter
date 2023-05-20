@@ -2,21 +2,20 @@ use super::*;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Decl {
+    Use(UseDecl),
     Struct(StructDecl),
     Function(FunctionDecl),
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct FunctionDecl {
-    pub name: token::Token,
-    pub params: Vec<FnParam>,
-    pub body: Vec<Stmt>,
+pub struct UseDecl {
+    pub path: StaticUsePath,
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct FnParam {
+pub struct StaticUsePath {
     pub name: token::Token,
-    pub type_ref: ast::StaticPath,
+    pub nexts: Vec<StaticUsePath>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -27,6 +26,27 @@ pub struct StructDecl {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct StructField {
+    pub name: token::Token,
+    pub type_ref: ast::StaticPath,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct FunctionDecl {
+    pub fn_mod: Option<FnMod>,
+    pub name: token::Token,
+    pub params: Vec<FnParam>,
+    pub body: Vec<Stmt>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum FnMod {
+    Pure,
+    Safe,
+    Unsafe,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct FnParam {
     pub name: token::Token,
     pub type_ref: ast::StaticPath,
 }
