@@ -131,4 +131,6 @@ pub enum BinaryOp {
     GreaterEqual,
     Less,
     LessEqual,
+    Range,
+    Modulo,
 }

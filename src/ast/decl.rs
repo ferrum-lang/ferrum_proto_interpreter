@@ -35,6 +35,7 @@ pub struct FunctionDecl {
     pub fn_mod: Option<FnMod>,
     pub name: token::Token,
     pub params: Vec<FnParam>,
+    pub return_type: Option<ast::StaticPath>,
     pub body: Vec<Stmt>,
 }
 

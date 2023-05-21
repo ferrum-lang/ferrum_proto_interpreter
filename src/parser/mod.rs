@@ -21,6 +21,13 @@ pub struct Parser {
     next_expr_id: ast::ExprId,
 }
 
+#[derive(Clone, Debug, PartialEq)]
+pub enum WithNewlines {
+    None,
+    One,
+    Many,
+}
+
 impl Parser {
     pub fn from_tokens(tokens: Vec<token::Token>) -> Self {
         return Self {
@@ -36,9 +43,25 @@ impl Parser {
 
     pub fn parse_ast(mut self) -> (ast::AST, ErrorContext) {
         while !self.is_at_end() {
-            if !self.match_any(&[token::TokenType::Newline]) {
-                if let Some(decl) = self.declaration() {
-                    self.decls.push(decl);
+            if self.match_any(&[token::TokenType::Newline], WithNewlines::Many) {
+                continue;
+            }
+
+            // Ignore out-of-place semicolons when errors exist
+            if self.error_ctx.error_reports.len() > 0
+                && self.match_any(&[token::TokenType::Semicolon], WithNewlines::Many)
+            {
+                continue;
+            }
+
+            if let Some(decl) = self.declaration() {
+                self.decls.push(decl);
+
+                if !self.is_at_end() {
+                    let _ = self.consume(
+                        &token::TokenType::Newline,
+                        "Expect newline after declaration",
+                    );
                 }
             }
         }
@@ -48,15 +71,15 @@ impl Parser {
 
     fn declaration(&mut self) -> Option<ast::Decl> {
         let mut try_declaration = || {
-            if self.match_any(&[token::TokenType::Use]) {
+            if self.match_any(&[token::TokenType::Use], WithNewlines::Many) {
                 return Ok(ast::Decl::Use(self.use_declaration()?));
             }
 
-            if self.match_any(&[token::TokenType::Struct]) {
+            if self.match_any(&[token::TokenType::Struct], WithNewlines::Many) {
                 return Ok(ast::Decl::Struct(self.struct_declaration()?));
             }
 
-            if self.match_any(&[token::TokenType::Impl]) {
+            if self.match_any(&[token::TokenType::Impl], WithNewlines::Many) {
                 // return Ok(ast::Decl::Impl);
             }
 
@@ -70,10 +93,10 @@ impl Parser {
 
                 let is_fn = if fn_mod.is_some() {
                     let _ = self.advance();
-                    self.consume(&token::TokenType::Fn, "Expect some fn after fn modifier")?;
+                    self.consume(&token::TokenType::Fn, "Expect 'fn' after fn modifier")?;
                     true
                 } else {
-                    self.match_any(&[token::TokenType::Fn])
+                    self.match_any(&[token::TokenType::Fn], WithNewlines::Many)
                 };
 
                 if is_fn {
@@ -103,7 +126,7 @@ impl Parser {
             nexts: vec![],
         };
 
-        while self.match_any(&[token::TokenType::ColonColon]) {
+        while self.match_any(&[token::TokenType::ColonColon], WithNewlines::One) {
             let nexts = match self.peek().cloned() {
                 Some(t) if t.token_type == token::TokenType::Identifier => {
                     vec![self.use_declaration()?.path]
@@ -113,7 +136,7 @@ impl Parser {
 
                     let mut nexts = vec![];
 
-                    while !self.match_any(&[token::TokenType::RightBrace]) {
+                    while !self.match_any(&[token::TokenType::RightBrace], WithNewlines::None) {
                         nexts.push(self.use_declaration()?.path);
                     }
 
@@ -145,11 +168,13 @@ impl Parser {
             "Expect '{' before struct body",
         )?;
 
+        let _ = self.match_any(&[token::TokenType::Comma], WithNewlines::Many);
+
         let mut fields = vec![];
 
         while self.check(&token::TokenType::Identifier) {
             let mut try_parse_field = |fields: &mut Vec<ast::StructField>| {
-                self.allow_newlines();
+                self.allow_many_newlines();
 
                 let name =
                     self.consume(&token::TokenType::Identifier, "Expect struct field name")?;
@@ -163,7 +188,7 @@ impl Parser {
 
                 fields.push(ast::StructField { name, type_ref });
 
-                let has_comma = self.match_any(&[token::TokenType::Comma]);
+                let has_comma = self.match_any(&[token::TokenType::Comma], WithNewlines::Many);
 
                 if let Some(&token::Token {
                     token_type: token::TokenType::RightBrace,
@@ -211,6 +236,8 @@ impl Parser {
 
         let mut params = vec![];
 
+        let _ = self.match_any(&[token::TokenType::Comma], WithNewlines::Many);
+
         while self.check(&token::TokenType::Identifier) {
             if params.len() >= 255 {
                 let t = self.peek().cloned().ok_or_else(|| self.eof_err())?;
@@ -225,7 +252,7 @@ impl Parser {
 
                 params.push(ast::FnParam { name, type_ref });
 
-                return Ok(self.match_any(&[token::TokenType::Comma]));
+                return Ok(self.match_any(&[token::TokenType::Comma], WithNewlines::Many));
             };
 
             match try_parse_field(&mut params) {
@@ -239,64 +266,201 @@ impl Parser {
             }
         }
 
+        self.allow_many_newlines();
+
         self.consume(&token::TokenType::RightParen, "Expect ')' after parameters")?;
+
+        let return_type = if self.match_any(&[token::TokenType::Colon], WithNewlines::One) {
+            Some(self.static_path()?)
+        } else {
+            None
+        };
+
         self.consume(
             &token::TokenType::Newline,
             "Expect newline after function signature",
         )?;
 
-        let mut body = vec![];
-
-        while !self.check(&token::TokenType::Semicolon) && !self.is_at_end() {
-            if !self.match_any(&[token::TokenType::Newline]) {
-                body.push(self.statement()?);
-            }
-        }
-
-        self.consume(&token::TokenType::Semicolon, "Expect ';' after block")?;
-        self.consume(
-            &token::TokenType::Newline,
-            "Expect newline after function body",
-        )?;
+        let body = self.block()?;
 
         return Ok(ast::FunctionDecl {
             fn_mod,
             name,
             params,
+            return_type,
             body,
         });
     }
 
-    fn statement(&mut self) -> Result<ast::Stmt> {
-        let stmt = self.expression_statement()?;
+    fn block(&mut self) -> Result<Vec<ast::Stmt>> {
+        let mut block = vec![];
 
-        self.consume(
-            &token::TokenType::Newline,
-            "Expect newline after expression.",
-        )?;
+        while !self.check(&token::TokenType::Semicolon) && !self.is_at_end() {
+            if !self.match_any(&[token::TokenType::Newline], WithNewlines::Many) {
+                block.push(self.statement()?);
+
+                if !self.is_at_end() {
+                    self.consume(&token::TokenType::Newline, "Expect newline after statement")?;
+                }
+            }
+        }
+
+        self.consume(&token::TokenType::Semicolon, "Expect ';' after block")?;
+
+        return Ok(block);
+    }
+
+    fn statement(&mut self) -> Result<ast::Stmt> {
+        if self.match_any(&[token::TokenType::For], WithNewlines::Many) {
+            return Ok(ast::Stmt::For(self.for_statement()?));
+        }
+
+        if self.match_any(&[token::TokenType::Const], WithNewlines::Many) {
+            return Ok(ast::Stmt::VarDecl(
+                self.var_decl_statement(ast::VarDeclType::Const)?,
+            ));
+        }
+
+        if self.match_any(&[token::TokenType::Mut], WithNewlines::Many) {
+            return Ok(ast::Stmt::VarDecl(
+                self.var_decl_statement(ast::VarDeclType::Mut)?,
+            ));
+        }
+
+        if self.match_any(&[token::TokenType::If], WithNewlines::Many) {
+            return Ok(ast::Stmt::If(self.if_statement()?));
+        }
+
+        if self.match_any(&[token::TokenType::Return], WithNewlines::Many) {
+            return Ok(ast::Stmt::Return(self.return_statement()?));
+        }
+
+        let stmt = self.expression_statement()?;
 
         return Ok(stmt);
     }
 
+    fn for_statement(&mut self) -> Result<ast::ForStmt> {
+        let assignment_pattern = self.var_assign_pattern()?;
+
+        self.consume(&token::TokenType::In, "Expect 'in' after for vars")?;
+
+        let iter = self.expression()?;
+
+        self.consume(&token::TokenType::Newline, "Expect newline after for")?;
+
+        let body = self.block()?;
+
+        return Ok(ast::ForStmt {
+            assignment_pattern,
+            iter,
+            body,
+        });
+    }
+
+    fn var_decl_statement(&mut self, var_decl_type: ast::VarDeclType) -> Result<ast::VarDeclStmt> {
+        let lhs = self.var_assign_pattern()?;
+
+        let value = if self.match_any(&[token::TokenType::Equal], WithNewlines::One) {
+            Some(self.expression()?)
+        } else {
+            None
+        };
+
+        return Ok(ast::VarDeclStmt {
+            var_decl_type,
+            lhs,
+            value,
+        });
+    }
+
+    fn if_statement(&mut self) -> Result<ast::IfStmt> {
+        let condition = self.expression()?;
+
+        self.consume(
+            &token::TokenType::Newline,
+            "Expect newine after if condition",
+        )?;
+
+        let then_branch = self.block()?;
+
+        let else_branch = if self.match_any(&[token::TokenType::Else], WithNewlines::Many) {
+            if self.match_any(&[token::TokenType::If], WithNewlines::None) {
+                Some(ast::ElseBranch::ElseIf(Box::new(self.if_statement()?)))
+            } else {
+                self.consume(&token::TokenType::Newline, "Expect newline after 'else'")?;
+                Some(ast::ElseBranch::Block(self.block()?))
+            }
+        } else {
+            None
+        };
+
+        return Ok(ast::IfStmt {
+            condition,
+            then_branch,
+            else_branch,
+        });
+    }
+
+    fn return_statement(&mut self) -> Result<ast::ReturnStmt> {
+        let value = if let Some(peek) = self.peek() {
+            if peek.token_type != token::TokenType::Newline {
+                Some(self.expression()?)
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
+        return Ok(ast::ReturnStmt { value });
+    }
+
     fn expression_statement(&mut self) -> Result<ast::Stmt> {
         let expr = self.expression()?;
+        let target_token = self.peek().cloned();
 
-        if self.match_any(&[token::TokenType::Equal]) {
-            let equals = self.previous().cloned().ok_or_else(|| self.eof_err())?;
-            let lhs = match expr {
-                ast::Expr::Identity(expr) => ast::AssignmentLHS::Identity(expr),
-                ast::Expr::Get(expr) => ast::AssignmentLHS::Get(expr),
+        if self.match_any(
+            &[token::TokenType::Equal, token::TokenType::PlusEqual],
+            WithNewlines::One,
+        ) {
+            let op_token = self.previous().cloned().ok_or_else(|| self.eof_err())?;
+
+            let op = match op_token.token_type {
+                token::TokenType::Equal => (ast::AssignOp::Equal, op_token),
+                token::TokenType::PlusEqual => (ast::AssignOp::PlusEqual, op_token),
 
                 _ => {
                     return Err(self.error(
+                        format!("[{}:{}] Expected '=' or '+='", file!(), line!()),
+                        op_token,
+                    ))
+                }
+            };
+
+            let lhs = match expr {
+                ast::Expr::Identity(expr) => {
+                    ast::AssignmentLHS::VarAssignPattern(ast::VarAssignPattern::Identity(expr))
+                }
+                ast::Expr::Get(expr) => ast::AssignmentLHS::Get(expr),
+
+                _ => {
+                    let target_token = target_token.ok_or_else(|| self.eof_err())?;
+
+                    return Err(self.error(
                         format!("[{}:{}] Invalid assignment target", file!(), line!()),
-                        equals,
+                        target_token,
                     ));
                 }
             };
+
             let value = self.expression()?;
 
-            return Ok(ast::Stmt::Assignment(ast::AssignmentStmt { lhs, value }));
+            return Ok(ast::Stmt::Assignment(ast::AssignmentStmt {
+                lhs,
+                op,
+                value,
+            }));
         } else {
             return Ok(ast::Stmt::Expr(expr));
         }
@@ -309,7 +473,7 @@ impl Parser {
     fn or(&mut self) -> Result<ast::Expr> {
         let mut expr = self.and()?;
 
-        while self.match_any(&[token::TokenType::Or]) {
+        while self.match_any(&[token::TokenType::Or], WithNewlines::One) {
             let operator = self.previous().cloned().ok_or_else(|| self.eof_err())?;
             let right = self.and()?;
 
@@ -327,7 +491,7 @@ impl Parser {
     fn and(&mut self) -> Result<ast::Expr> {
         let mut expr = self.equality()?;
 
-        while self.match_any(&[token::TokenType::And]) {
+        while self.match_any(&[token::TokenType::And], WithNewlines::One) {
             let operator = self.previous().cloned().ok_or_else(|| self.eof_err())?;
             let right = self.equality()?;
 
@@ -345,7 +509,10 @@ impl Parser {
     fn equality(&mut self) -> Result<ast::Expr> {
         let mut expr = self.comparison()?;
 
-        while self.match_any(&[token::TokenType::BangEqual, token::TokenType::EqualEqual]) {
+        while self.match_any(
+            &[token::TokenType::BangEqual, token::TokenType::EqualEqual],
+            WithNewlines::One,
+        ) {
             let op_token = self.previous().cloned().ok_or_else(|| self.eof_err())?;
 
             let op = match op_token.token_type {
@@ -374,14 +541,17 @@ impl Parser {
     }
 
     fn comparison(&mut self) -> Result<ast::Expr> {
-        let mut expr = self.term()?;
+        let mut expr = self.range()?;
 
-        while self.match_any(&[
-            token::TokenType::Greater,
-            token::TokenType::GreaterEqual,
-            token::TokenType::Less,
-            token::TokenType::LessEqual,
-        ]) {
+        while self.match_any(
+            &[
+                token::TokenType::Greater,
+                token::TokenType::GreaterEqual,
+                token::TokenType::Less,
+                token::TokenType::LessEqual,
+            ],
+            WithNewlines::One,
+        ) {
             let op_token = self.previous().cloned().ok_or_else(|| self.eof_err())?;
 
             let op = match op_token.token_type {
@@ -394,7 +564,36 @@ impl Parser {
                     return Err(self.error(
                         format!("[{}:{}] Expected '>', '>=', '<', or '<='", file!(), line!()),
                         op_token,
-                    ))
+                    ));
+                }
+            };
+
+            let right = self.range()?;
+
+            expr = ast::Expr::Binary(ast::BinaryExpr {
+                id: self.expr_id(),
+                left: Box::new(expr),
+                op,
+                right: Box::new(right),
+            });
+        }
+
+        return Ok(expr);
+    }
+
+    fn range(&mut self) -> Result<ast::Expr> {
+        let mut expr = self.term()?;
+
+        while self.match_any(&[token::TokenType::DotDot], WithNewlines::One) {
+            let op_token = self.previous().cloned().ok_or_else(|| self.eof_err())?;
+
+            let op = match op_token.token_type {
+                token::TokenType::DotDot => (ast::BinaryOp::Range, op_token),
+
+                _ => {
+                    return Err(
+                        self.error(format!("[{}:{}] Expected '..'", file!(), line!()), op_token)
+                    );
                 }
             };
 
@@ -414,7 +613,10 @@ impl Parser {
     fn term(&mut self) -> Result<ast::Expr> {
         let mut expr = self.factor()?;
 
-        while self.match_any(&[token::TokenType::Minus, token::TokenType::Plus]) {
+        while self.match_any(
+            &[token::TokenType::Minus, token::TokenType::Plus],
+            WithNewlines::One,
+        ) {
             let op_token = self.previous().cloned().ok_or_else(|| self.eof_err())?;
 
             let op = match op_token.token_type {
@@ -443,9 +645,12 @@ impl Parser {
     }
 
     fn factor(&mut self) -> Result<ast::Expr> {
-        let mut expr = self.unary()?;
+        let mut expr = self.modulo()?;
 
-        while self.match_any(&[token::TokenType::Slash, token::TokenType::Asterisk]) {
+        while self.match_any(
+            &[token::TokenType::Slash, token::TokenType::Asterisk],
+            WithNewlines::One,
+        ) {
             let op_token = self.previous().cloned().ok_or_else(|| self.eof_err())?;
 
             let op = match op_token.token_type {
@@ -457,6 +662,35 @@ impl Parser {
                         format!("[{}:{}] Expected '/' or '*'", file!(), line!()),
                         op_token,
                     ))
+                }
+            };
+
+            let right = self.modulo()?;
+
+            expr = ast::Expr::Binary(ast::BinaryExpr {
+                id: self.expr_id(),
+                left: Box::new(expr),
+                op,
+                right: Box::new(right),
+            });
+        }
+
+        return Ok(expr);
+    }
+
+    fn modulo(&mut self) -> Result<ast::Expr> {
+        let mut expr = self.unary()?;
+
+        while self.match_any(&[token::TokenType::Percent], WithNewlines::One) {
+            let op_token = self.previous().cloned().ok_or_else(|| self.eof_err())?;
+
+            let op = match op_token.token_type {
+                token::TokenType::Percent => (ast::BinaryOp::Modulo, op_token),
+
+                _ => {
+                    return Err(
+                        self.error(format!("[{}:{}] Expected '%'", file!(), line!()), op_token)
+                    )
                 }
             };
 
@@ -474,7 +708,10 @@ impl Parser {
     }
 
     fn unary(&mut self) -> Result<ast::Expr> {
-        if self.match_any(&[token::TokenType::Bang, token::TokenType::Minus]) {
+        if self.match_any(
+            &[token::TokenType::Bang, token::TokenType::Minus],
+            WithNewlines::One,
+        ) {
             let op_token = self.previous().cloned().ok_or_else(|| self.eof_err())?;
 
             let op = match op_token.token_type {
@@ -505,9 +742,9 @@ impl Parser {
         let mut expr = self.primary()?;
 
         loop {
-            if self.match_any(&[token::TokenType::LeftParen]) {
+            if self.match_any(&[token::TokenType::LeftParen], WithNewlines::None) {
                 expr = self.finish_call(expr)?;
-            } else if self.match_any(&[token::TokenType::Dot]) {
+            } else if self.match_any(&[token::TokenType::Dot], WithNewlines::One) {
                 let name =
                     self.consume(&token::TokenType::Identifier, "Expect property name '.'")?;
 
@@ -527,6 +764,9 @@ impl Parser {
     fn finish_call(&mut self, callee: ast::Expr) -> Result<ast::Expr> {
         let mut arguments = vec![];
 
+        let _ = self.match_any(&[token::TokenType::Comma], WithNewlines::Many);
+        self.allow_many_newlines();
+
         if !self.check(&token::TokenType::RightParen) {
             loop {
                 if arguments.len() >= 255 {
@@ -536,7 +776,7 @@ impl Parser {
 
                 arguments.push(self.expression()?);
 
-                if !self.match_any(&[token::TokenType::Comma]) {
+                if !self.match_any(&[token::TokenType::Comma], WithNewlines::Many) {
                     break;
                 }
             }
@@ -672,11 +912,23 @@ impl Parser {
         }
     }
 
+    fn var_assign_pattern(&mut self) -> Result<ast::VarAssignPattern> {
+        // TODO
+
+        return Ok(ast::VarAssignPattern::Identity(ast::IdentityExpr {
+            id: self.expr_id(),
+            name: self.consume(
+                &token::TokenType::Identifier,
+                "TODO: Handle more complicated assignment patterns",
+            )?,
+        }));
+    }
+
     fn static_path(&mut self) -> Result<ast::StaticPath> {
         let mut name = self.consume(&token::TokenType::Identifier, "Expect type reference")?;
         let mut path = ast::StaticPath { root: None, name };
 
-        while self.match_any(&[token::TokenType::ColonColon]) {
+        while self.match_any(&[token::TokenType::ColonColon], WithNewlines::None) {
             name = self.consume(&token::TokenType::Identifier, "Expect type reference")?;
             path = ast::StaticPath {
                 root: Some(Box::new(path)),
@@ -687,21 +939,39 @@ impl Parser {
         return Ok(path);
     }
 
-    fn allow_newlines(&mut self) -> bool {
+    fn allow_many_newlines(&mut self) -> bool {
         let mut any_newlines = false;
 
-        while self.match_any(&[token::TokenType::Newline]) {
+        while self.match_any(&[token::TokenType::Newline], WithNewlines::Many) {
             any_newlines = true;
         }
 
         return any_newlines;
     }
 
-    fn match_any(&mut self, token_types: &[token::TokenType]) -> bool {
+    fn match_any(&mut self, token_types: &[token::TokenType], with_newlines: WithNewlines) -> bool {
         for token_type in token_types {
-            if self.check(token_type) {
-                self.advance();
-                return true;
+            let mut newlines = 0;
+            loop {
+                if self.check_offset(newlines, token_type) {
+                    for _ in 0..(newlines + 1) {
+                        self.advance();
+                    }
+
+                    return true;
+                } else {
+                    if with_newlines == WithNewlines::Many && self.check(&token::TokenType::Newline)
+                    {
+                        newlines += 1;
+                    } else if with_newlines == WithNewlines::One
+                        && newlines == 0
+                        && self.check(&token::TokenType::Newline)
+                    {
+                        newlines += 1;
+                    } else {
+                        break;
+                    }
+                }
             }
         }
 
@@ -736,9 +1006,11 @@ impl Parser {
     }
 
     fn synchronize_declaration(&mut self) {
+        dbg!(self.peek());
         self.advance();
 
         while !self.is_at_end() {
+            dbg!(self.peek());
             if let Some(prev) = self.previous() {
                 match prev.token_type {
                     token::TokenType::Semicolon
@@ -885,8 +1157,13 @@ impl Parser {
     }
 
     fn check(&self, token_type: &token::TokenType) -> bool {
+        return self.check_offset(0, token_type);
+    }
+
+    fn check_offset(&self, offset: usize, token_type: &token::TokenType) -> bool {
         return self
-            .peek()
+            .tokens
+            .get(self.current_idx + offset)
             .map(|peek| peek.token_type == *token_type)
             .unwrap_or(false);
     }
@@ -897,6 +1174,16 @@ impl Parser {
         }
 
         return self.previous();
+    }
+
+    fn backtrack(&mut self) -> Option<&token::Token> {
+        if self.current_idx == 0 {
+            return None;
+        }
+
+        self.current_idx -= 1;
+
+        return self.peek();
     }
 
     fn is_at_end(&self) -> bool {
