@@ -1,12 +1,8 @@
 use fe::print
 
-safe fn main()
-	print("Hello {world}")
-
-	foo = -42 / 3
-
-	print(":)")
-
-	bar.baz().value = 42
+pub safe fn main()
+	const name = "Adam"
+	
+	print("Hello {name}")
 ;
 

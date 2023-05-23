@@ -1,6 +1,7 @@
 use super::*;
 
 use crate::parser;
+use crate::resolver;
 use crate::scanner;
 
 use std::fs;
@@ -17,13 +18,16 @@ pub fn run(config: &Config) -> Result {
     let content = fs::read_to_string(path::PathBuf::from(entry_file))?;
     // dbg!(&content);
 
-    let (tokens, scan_error_ctx) = scanner::Scanner::from_source(content).scan_tokens();
+    let (tokens, scan_err_ctx) = scanner::Scanner::from_source(content).scan_tokens();
     // dbg!(&tokens);
 
-    let (ast, parse_error_ctx) = parser::Parser::from_tokens(tokens).parse_ast();
+    let (ast, parse_err_ctx) = parser::Parser::from_tokens(tokens).parse_ast();
     dbg!(&ast);
 
-    let error_ctx = ErrorContext::merge(vec![scan_error_ctx, parse_error_ctx]);
+    let (locals, resolve_err_ctx) = resolver::Resolver::from_ast(&ast).resolve_locals();
+    dbg!(&locals);
+
+    let error_ctx = ErrorContext::merge(vec![scan_err_ctx, parse_err_ctx, resolve_err_ctx]);
     dbg!(&error_ctx);
 
     return ok();

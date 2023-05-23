@@ -18,7 +18,7 @@ pub struct Parser {
     decls: Vec<ast::Decl>,
     error_ctx: ErrorContext,
 
-    next_expr_id: ast::ExprId,
+    next_ast_id: ast::Id,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -37,7 +37,7 @@ impl Parser {
             decls: Vec::new(),
             error_ctx: ErrorContext::new(),
 
-            next_expr_id: 0,
+            next_ast_id: 0,
         };
     }
 
@@ -66,17 +66,29 @@ impl Parser {
             }
         }
 
-        return (ast::AST { decls: self.decls }, self.error_ctx);
+        return (
+            ast::AST {
+                id: self.ast_id(),
+                decls: self.decls,
+            },
+            self.error_ctx,
+        );
     }
 
     fn declaration(&mut self) -> Option<ast::Decl> {
         let mut try_declaration = || {
+            let mut decl_mod = None;
+
+            if self.match_any(&[token::TokenType::Pub], WithNewlines::Many) {
+                decl_mod = Some(ast::DeclMod::Pub);
+            }
+
             if self.match_any(&[token::TokenType::Use], WithNewlines::Many) {
-                return Ok(ast::Decl::Use(self.use_declaration()?));
+                return Ok(ast::Decl::Use(self.use_declaration(decl_mod)?));
             }
 
             if self.match_any(&[token::TokenType::Struct], WithNewlines::Many) {
-                return Ok(ast::Decl::Struct(self.struct_declaration()?));
+                return Ok(ast::Decl::Struct(self.struct_declaration(decl_mod)?));
             }
 
             if self.match_any(&[token::TokenType::Impl], WithNewlines::Many) {
@@ -100,7 +112,7 @@ impl Parser {
                 };
 
                 if is_fn {
-                    return Ok(ast::Decl::Function(self.function(fn_mod)?));
+                    return Ok(ast::Decl::Function(self.function(decl_mod, fn_mod)?));
                 }
             }
 
@@ -119,7 +131,7 @@ impl Parser {
         }
     }
 
-    fn use_declaration(&mut self) -> Result<ast::UseDecl> {
+    fn use_declaration(&mut self, decl_mod: Option<ast::DeclMod>) -> Result<ast::UseDecl> {
         let name = self.consume(&token::TokenType::Identifier, "Expect use name")?;
         let mut path = ast::StaticUsePath {
             name,
@@ -129,7 +141,7 @@ impl Parser {
         while self.match_any(&[token::TokenType::ColonColon], WithNewlines::One) {
             let nexts = match self.peek().cloned() {
                 Some(t) if t.token_type == token::TokenType::Identifier => {
-                    vec![self.use_declaration()?.path]
+                    vec![self.use_declaration(None)?.path]
                 }
                 Some(t) if t.token_type == token::TokenType::LeftBrace => {
                     let _ = self.advance();
@@ -137,7 +149,7 @@ impl Parser {
                     let mut nexts = vec![];
 
                     while !self.match_any(&[token::TokenType::RightBrace], WithNewlines::None) {
-                        nexts.push(self.use_declaration()?.path);
+                        nexts.push(self.use_declaration(None)?.path);
                     }
 
                     nexts
@@ -157,10 +169,14 @@ impl Parser {
             path.nexts = nexts;
         }
 
-        return Ok(ast::UseDecl { path });
+        return Ok(ast::UseDecl {
+            id: self.ast_id(),
+            decl_mod,
+            path,
+        });
     }
 
-    fn struct_declaration(&mut self) -> Result<ast::StructDecl> {
+    fn struct_declaration(&mut self, decl_mod: Option<ast::DeclMod>) -> Result<ast::StructDecl> {
         let name = self.consume(&token::TokenType::Identifier, "Expect struct name")?;
 
         self.consume(
@@ -223,10 +239,19 @@ impl Parser {
             "Expect '}' after struct body",
         )?;
 
-        return Ok(ast::StructDecl { name, fields });
+        return Ok(ast::StructDecl {
+            id: self.ast_id(),
+            decl_mod,
+            name,
+            fields,
+        });
     }
 
-    fn function(&mut self, fn_mod: Option<ast::FnMod>) -> Result<ast::FunctionDecl> {
+    fn function(
+        &mut self,
+        decl_mod: Option<ast::DeclMod>,
+        fn_mod: Option<ast::FnMod>,
+    ) -> Result<ast::FunctionDecl> {
         let name = self.consume(&token::TokenType::Identifier, "Expect function name")?;
 
         self.consume(
@@ -284,6 +309,8 @@ impl Parser {
         let body = self.block()?;
 
         return Ok(ast::FunctionDecl {
+            id: self.ast_id(),
+            decl_mod,
             fn_mod,
             name,
             params,
@@ -352,6 +379,7 @@ impl Parser {
         let body = self.block()?;
 
         return Ok(ast::ForStmt {
+            id: self.ast_id(),
             assignment_pattern,
             iter,
             body,
@@ -368,6 +396,7 @@ impl Parser {
         };
 
         return Ok(ast::VarDeclStmt {
+            id: self.ast_id(),
             var_decl_type,
             lhs,
             value,
@@ -396,6 +425,7 @@ impl Parser {
         };
 
         return Ok(ast::IfStmt {
+            id: self.ast_id(),
             condition,
             then_branch,
             else_branch,
@@ -413,7 +443,10 @@ impl Parser {
             None
         };
 
-        return Ok(ast::ReturnStmt { value });
+        return Ok(ast::ReturnStmt {
+            id: self.ast_id(),
+            value,
+        });
     }
 
     fn expression_statement(&mut self) -> Result<ast::Stmt> {
@@ -457,12 +490,16 @@ impl Parser {
             let value = self.expression()?;
 
             return Ok(ast::Stmt::Assignment(ast::AssignmentStmt {
+                id: self.ast_id(),
                 lhs,
                 op,
                 value,
             }));
         } else {
-            return Ok(ast::Stmt::Expr(expr));
+            return Ok(ast::Stmt::Expr(ast::ExprStmt {
+                id: self.ast_id(),
+                expr,
+            }));
         }
     }
 
@@ -478,7 +515,7 @@ impl Parser {
             let right = self.and()?;
 
             expr = ast::Expr::Logical(ast::LogicalExpr {
-                id: self.expr_id(),
+                id: self.ast_id(),
                 left: Box::new(expr),
                 operator,
                 right: Box::new(right),
@@ -496,7 +533,7 @@ impl Parser {
             let right = self.equality()?;
 
             expr = ast::Expr::Logical(ast::LogicalExpr {
-                id: self.expr_id(),
+                id: self.ast_id(),
                 left: Box::new(expr),
                 operator,
                 right: Box::new(right),
@@ -530,7 +567,7 @@ impl Parser {
             let right = self.comparison()?;
 
             expr = ast::Expr::Binary(ast::BinaryExpr {
-                id: self.expr_id(),
+                id: self.ast_id(),
                 left: Box::new(expr),
                 op,
                 right: Box::new(right),
@@ -571,7 +608,7 @@ impl Parser {
             let right = self.range()?;
 
             expr = ast::Expr::Binary(ast::BinaryExpr {
-                id: self.expr_id(),
+                id: self.ast_id(),
                 left: Box::new(expr),
                 op,
                 right: Box::new(right),
@@ -600,7 +637,7 @@ impl Parser {
             let right = self.term()?;
 
             expr = ast::Expr::Binary(ast::BinaryExpr {
-                id: self.expr_id(),
+                id: self.ast_id(),
                 left: Box::new(expr),
                 op,
                 right: Box::new(right),
@@ -634,7 +671,7 @@ impl Parser {
             let right = self.factor()?;
 
             expr = ast::Expr::Binary(ast::BinaryExpr {
-                id: self.expr_id(),
+                id: self.ast_id(),
                 left: Box::new(expr),
                 op,
                 right: Box::new(right),
@@ -668,7 +705,7 @@ impl Parser {
             let right = self.modulo()?;
 
             expr = ast::Expr::Binary(ast::BinaryExpr {
-                id: self.expr_id(),
+                id: self.ast_id(),
                 left: Box::new(expr),
                 op,
                 right: Box::new(right),
@@ -697,7 +734,7 @@ impl Parser {
             let right = self.unary()?;
 
             expr = ast::Expr::Binary(ast::BinaryExpr {
-                id: self.expr_id(),
+                id: self.ast_id(),
                 left: Box::new(expr),
                 op,
                 right: Box::new(right),
@@ -729,7 +766,7 @@ impl Parser {
             let right = self.unary()?;
 
             return Ok(ast::Expr::Unary(ast::UnaryExpr {
-                id: self.expr_id(),
+                id: self.ast_id(),
                 op,
                 right: Box::new(right),
             }));
@@ -749,7 +786,7 @@ impl Parser {
                     self.consume(&token::TokenType::Identifier, "Expect property name '.'")?;
 
                 expr = ast::Expr::Get(ast::GetExpr {
-                    id: self.expr_id(),
+                    id: self.ast_id(),
                     object: Box::new(expr),
                     name,
                 });
@@ -788,7 +825,7 @@ impl Parser {
         )?;
 
         return Ok(ast::Expr::Call(ast::CallExpr {
-            id: self.expr_id(),
+            id: self.ast_id(),
             callee: Box::new(callee),
             arguments,
         }));
@@ -817,7 +854,7 @@ impl Parser {
                 };
 
                 return Ok(ast::Expr::PlainLiteral(ast::PlainLiteralExpr {
-                    id: self.expr_id(),
+                    id: self.ast_id(),
                     literal_type,
                     token: t,
                 }));
@@ -871,7 +908,7 @@ impl Parser {
                 }
 
                 return Ok(ast::Expr::FormatString(ast::FormatStringExpr {
-                    id: self.expr_id(),
+                    id: self.ast_id(),
                     open: open_token,
                     parts,
                 }));
@@ -884,7 +921,7 @@ impl Parser {
                 },
             ) => {
                 return Ok(ast::Expr::SelfVal(ast::SelfValExpr {
-                    id: self.expr_id(),
+                    id: self.ast_id(),
                     keyword: t,
                 }));
             }
@@ -896,7 +933,7 @@ impl Parser {
                 },
             ) => {
                 return Ok(ast::Expr::Identity(ast::IdentityExpr {
-                    id: self.expr_id(),
+                    id: self.ast_id(),
                     name: t,
                 }));
             }
@@ -916,7 +953,7 @@ impl Parser {
         // TODO
 
         return Ok(ast::VarAssignPattern::Identity(ast::IdentityExpr {
-            id: self.expr_id(),
+            id: self.ast_id(),
             name: self.consume(
                 &token::TokenType::Identifier,
                 "TODO: Handle more complicated assignment patterns",
@@ -1205,10 +1242,10 @@ impl Parser {
         return self.tokens.get(self.current_idx - 1);
     }
 
-    fn expr_id(&mut self) -> ast::ExprId {
-        let id = self.next_expr_id;
+    fn ast_id(&mut self) -> ast::Id {
+        let id = self.next_ast_id;
 
-        self.next_expr_id += 1;
+        self.next_ast_id += 1;
 
         return id;
     }
