@@ -110,7 +110,6 @@ impl<'a> Resolver<'a> {
         let mut i = self.scopes.len() - 1;
 
         loop {
-            println!("{}, {:?}, {:?}", i, self.scopes[i], name);
             if self.scopes[i].contains_key(&name.lexeme) {
                 self.locals.insert(id, self.scopes.len() - 1 - i);
 

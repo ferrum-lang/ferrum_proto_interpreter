@@ -27,6 +27,7 @@ pub fn run(config: &Config) -> Result {
     let (locals, resolve_err_ctx) = resolver::Resolver::from_ast(&ast).resolve_locals();
     dbg!(&locals);
 
+    // let error_ctx = ErrorContext::merge(vec![scan_err_ctx, parse_err_ctx]);
     let error_ctx = ErrorContext::merge(vec![scan_err_ctx, parse_err_ctx, resolve_err_ctx]);
     dbg!(&error_ctx);
 

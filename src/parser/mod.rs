@@ -43,7 +43,7 @@ impl Parser {
 
     pub fn parse_ast(mut self) -> (ast::AST, ErrorContext) {
         while !self.is_at_end() {
-            if self.match_any(&[token::TokenType::Newline], WithNewlines::Many) {
+            if self.allow_many_newlines() > 0 {
                 continue;
             }
 
@@ -320,10 +320,19 @@ impl Parser {
     }
 
     fn block(&mut self) -> Result<Vec<ast::Stmt>> {
+        return self
+            .block_with_any_end(&[token::TokenType::Semicolon])
+            .map(|(a, _)| a);
+    }
+
+    fn block_with_any_end(
+        &mut self,
+        any_end: &[token::TokenType],
+    ) -> Result<(Vec<ast::Stmt>, token::Token)> {
         let mut block = vec![];
 
-        while !self.check(&token::TokenType::Semicolon) && !self.is_at_end() {
-            if !self.match_any(&[token::TokenType::Newline], WithNewlines::Many) {
+        while !self.match_any(any_end, WithNewlines::Many) && !self.is_at_end() {
+            if self.allow_many_newlines() == 0 {
                 block.push(self.statement()?);
 
                 if !self.is_at_end() {
@@ -332,9 +341,12 @@ impl Parser {
             }
         }
 
-        self.consume(&token::TokenType::Semicolon, "Expect ';' after block")?;
+        let close = self
+            .previous()
+            .cloned()
+            .unwrap_or_else(|| self.tokens[0].clone());
 
-        return Ok(block);
+        return Ok((block, close));
     }
 
     fn statement(&mut self) -> Result<ast::Stmt> {
@@ -411,9 +423,10 @@ impl Parser {
             "Expect newine after if condition",
         )?;
 
-        let then_branch = self.block()?;
+        let (then_branch, close) =
+            self.block_with_any_end(&[token::TokenType::Semicolon, token::TokenType::Else])?;
 
-        let else_branch = if self.match_any(&[token::TokenType::Else], WithNewlines::Many) {
+        let else_branch = if close.token_type == token::TokenType::Else {
             if self.match_any(&[token::TokenType::If], WithNewlines::None) {
                 Some(ast::ElseBranch::ElseIf(Box::new(self.if_statement()?)))
             } else {
@@ -976,40 +989,44 @@ impl Parser {
         return Ok(path);
     }
 
-    fn allow_many_newlines(&mut self) -> bool {
-        let mut any_newlines = false;
+    fn allow_one_newline(&mut self) -> bool {
+        return self.match_any(&[token::TokenType::Newline], WithNewlines::None);
+    }
 
-        while self.match_any(&[token::TokenType::Newline], WithNewlines::Many) {
-            any_newlines = true;
+    fn allow_many_newlines(&mut self) -> usize {
+        let mut any_newlines = 0;
+
+        while self.allow_one_newline() {
+            any_newlines += 1;
         }
 
         return any_newlines;
     }
 
     fn match_any(&mut self, token_types: &[token::TokenType], with_newlines: WithNewlines) -> bool {
-        for token_type in token_types {
-            let mut newlines = 0;
-            loop {
-                if self.check_offset(newlines, token_type) {
-                    for _ in 0..(newlines + 1) {
-                        self.advance();
-                    }
-
-                    return true;
+        let newlines: usize = match with_newlines {
+            WithNewlines::None => 0,
+            WithNewlines::One => {
+                if self.allow_one_newline() {
+                    1
                 } else {
-                    if with_newlines == WithNewlines::Many && self.check(&token::TokenType::Newline)
-                    {
-                        newlines += 1;
-                    } else if with_newlines == WithNewlines::One
-                        && newlines == 0
-                        && self.check(&token::TokenType::Newline)
-                    {
-                        newlines += 1;
-                    } else {
-                        break;
-                    }
+                    0
                 }
             }
+
+            WithNewlines::Many => self.allow_many_newlines(),
+        };
+
+        for token_type in token_types {
+            if self.check(token_type) {
+                self.advance();
+
+                return true;
+            }
+        }
+
+        for _ in 0..newlines {
+            self.backtrack();
         }
 
         return false;
@@ -1043,11 +1060,11 @@ impl Parser {
     }
 
     fn synchronize_declaration(&mut self) {
-        dbg!(self.peek());
+        // dbg!(self.peek());
         self.advance();
 
         while !self.is_at_end() {
-            dbg!(self.peek());
+            // dbg!(self.peek());
             if let Some(prev) = self.previous() {
                 match prev.token_type {
                     token::TokenType::Semicolon
