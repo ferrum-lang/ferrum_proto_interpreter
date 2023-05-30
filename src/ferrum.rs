@@ -1,5 +1,6 @@
 use super::*;
 
+use crate::interpreter;
 use crate::parser;
 use crate::resolver;
 use crate::scanner;
@@ -22,14 +23,17 @@ pub fn run(config: &Config) -> Result {
     // dbg!(&tokens);
 
     let (ast, parse_err_ctx) = parser::Parser::from_tokens(tokens).parse_ast();
-    dbg!(&ast);
+    // dbg!(&ast);
 
     let (locals, resolve_err_ctx) = resolver::Resolver::from_ast(&ast).resolve_locals();
-    dbg!(&locals);
+    // dbg!(&locals);
 
-    // let error_ctx = ErrorContext::merge(vec![scan_err_ctx, parse_err_ctx]);
     let error_ctx = ErrorContext::merge(vec![scan_err_ctx, parse_err_ctx, resolve_err_ctx]);
-    dbg!(&error_ctx);
+    // dbg!(&error_ctx);
+
+    if error_ctx.error_reports.is_empty() {
+        let _runtime_err_ctx = interpreter::Interpreter::from_context(ast, locals).interpret();
+    }
 
     return ok();
 }

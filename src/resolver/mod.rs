@@ -232,7 +232,14 @@ impl ast::StmtVisitor for Resolver<'_> {
     }
 
     fn visit_if_stmt(&mut self, stmt: &ast::IfStmt) -> () {
-        unimplemented!()
+        self.resolve_expr(&stmt.condition);
+        self.resolve_stmts(&stmt.then_branch);
+
+        match &stmt.else_branch {
+            Some(ast::ElseBranch::ElseIf(elif)) => self.visit_if_stmt(&elif),
+            Some(ast::ElseBranch::Block(else_branch)) => self.resolve_stmts(else_branch),
+            None => {}
+        }
     }
 
     fn visit_return_stmt(&mut self, stmt: &ast::ReturnStmt) -> () {
