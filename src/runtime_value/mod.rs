@@ -21,9 +21,10 @@ pub type RuntimeResult<T = RuntimeValue, E = RuntimeError> = Result<T, E>;
 pub enum RuntimeValue {
     Boolean(bool),
     Number(f64),
-    PlainString(String),
+    String(String),
     Callable(FerrumCallable),
     Instance(FerrumInstance),
+    Unknown,
 }
 
 impl RuntimeValue {
@@ -43,7 +44,7 @@ impl RuntimeValue {
                 literal_type: ast::PlainLiteralType::PlainString,
                 token: token::Token { lexeme, .. },
                 ..
-            } => return Self::PlainString(lexeme[1..lexeme.len() - 1].to_string()),
+            } => return Self::String(lexeme[1..lexeme.len() - 1].to_string()),
 
             ast::PlainLiteralExpr {
                 literal_type: ast::PlainLiteralType::Number,
@@ -60,6 +61,28 @@ impl RuntimeValue {
                 file!(),
                 line!()
             ),
+        }
+    }
+}
+
+impl ToString for RuntimeValue {
+    fn to_string(&self) -> String {
+        match self {
+            Self::Boolean(true) => return "true".to_string(),
+            Self::Boolean(false) => return "false".to_string(),
+
+            Self::Number(n) => return n.to_string(),
+
+            Self::String(string) => return string.clone(),
+
+            Self::Callable(callable) => match callable {
+                FerrumCallable::Struct(s) => return format!("[struct {}]", s.name),
+                FerrumCallable::Function(f) => return format!("[function {}]", f.decl.name.lexeme),
+            },
+
+            Self::Instance(instance) => return format!("[instance_of {}]", instance.struct_.name),
+
+            Self::Unknown => panic!("Cannot convert an unknown value to a string!"),
         }
     }
 }

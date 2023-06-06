@@ -111,6 +111,20 @@ impl Interpreter {
         return res;
     }
 
+    fn define_lhs(
+        &mut self,
+        lhs: &ast::VarAssignPattern,
+        value: rt::RuntimeValue,
+    ) -> rt::RuntimeResult<()> {
+        match lhs {
+            ast::VarAssignPattern::Identity(name) => {
+                self.environment.define(name.name.lexeme.clone(), value)
+            }
+        }
+
+        return Ok(());
+    }
+
     fn look_up_variable(&self, name: &token::Token, id: &ast::Id) -> rt::RuntimeResult {
         if let Some(distance) = self.locals.get(id) {
             return env::SharedEnvironment::get_at(&self.environment, *distance, name);
@@ -274,7 +288,13 @@ impl StmtVisitor<rt::RuntimeResult<()>> for Interpreter {
     }
 
     fn visit_var_decl_stmt(&mut self, stmt: &ast::VarDeclStmt) -> rt::RuntimeResult<()> {
-        todo!()
+        let value = if let Some(value) = &stmt.value {
+            self.evaluate(value)?
+        } else {
+            rt::RuntimeValue::Unknown
+        };
+
+        return self.define_lhs(&stmt.lhs, value);
     }
 
     fn visit_expr_stmt(&mut self, stmt: &ast::ExprStmt) -> rt::RuntimeResult<()> {
@@ -314,7 +334,12 @@ impl ExprVisitor<rt::RuntimeResult> for Interpreter {
 
         if let rt::FerrumCallable::Function(function) = &function {
             if function.decl.name.lexeme.as_str() == "print" {
-                println!("{:?}", arguments.get(0));
+                let string = arguments
+                    .get(0)
+                    .map(|arg| arg.to_string())
+                    .unwrap_or("None".to_string());
+
+                println!("{string}");
             }
         }
 
@@ -334,7 +359,18 @@ impl ExprVisitor<rt::RuntimeResult> for Interpreter {
     }
 
     fn visit_format_string_expr(&mut self, expr: &ast::FormatStringExpr) -> rt::RuntimeResult {
-        todo!()
+        // Ignore opening "
+        let mut string = expr.open.lexeme[1..].to_string();
+
+        for part in expr.parts.iter() {
+            let part_val = self.evaluate(&part.expr)?;
+            string.push_str(&part_val.to_string());
+            string.push_str(&part.fmt_str_part.lexeme);
+        }
+
+        string.pop(); // Ignore closing "
+
+        return Ok(rt::RuntimeValue::String(string));
     }
 
     fn visit_logical_expr(&mut self, expr: &ast::LogicalExpr) -> rt::RuntimeResult {

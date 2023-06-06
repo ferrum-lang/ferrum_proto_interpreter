@@ -1,6 +1,8 @@
 use fe::print
 
 pub safe fn main()
-	print("Hello world")
+	const name = "Adam"
+	
+	print("Hello {name}!")
 ;
 
