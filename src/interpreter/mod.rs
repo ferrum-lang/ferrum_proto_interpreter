@@ -65,8 +65,10 @@ impl Interpreter {
                             column: 0,
                         }),
                     },
+                    type_info: (),
                 })),
                 arguments: vec![],
+                type_info: (),
             })) {
                 self.error_ctx.runtime_error(e);
             }
@@ -192,6 +194,7 @@ impl DeclVisitor<rt::RuntimeResult<()>> for Interpreter {
                                             column: 0,
                                         }),
                                     },
+                                    type_info: (),
                                 },
                             }],
                             return_type: None,

@@ -1,13 +1,39 @@
 use super::*;
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum Stmt {
-    Expr(ExprStmt),
-    VarDecl(VarDeclStmt),
-    Assignment(AssignmentStmt),
-    For(ForStmt),
-    If(IfStmt),
-    Return(ReturnStmt),
+pub enum Stmt<TypeInfo = ()> {
+    Expr(ExprStmt<TypeInfo>),
+    VarDecl(VarDeclStmt<TypeInfo>),
+    Assignment(AssignmentStmt<TypeInfo>),
+    For(ForStmt<TypeInfo>),
+    If(IfStmt<TypeInfo>),
+    Return(ReturnStmt<TypeInfo>),
+}
+
+impl Stmt<()> {
+    pub fn init_types<T>(self) -> Stmt<Option<T>> {
+        match self {
+            Self::Expr(stmt) => return Stmt::Expr(stmt.init_types()),
+            Self::VarDecl(stmt) => return Stmt::VarDecl(stmt.init_types()),
+            Self::Assignment(stmt) => return Stmt::Assignment(stmt.init_types()),
+            Self::For(stmt) => return Stmt::For(stmt.init_types()),
+            Self::If(stmt) => return Stmt::If(stmt.init_types()),
+            Self::Return(stmt) => return Stmt::Return(stmt.init_types()),
+        }
+    }
+}
+
+impl<T> Stmt<Option<T>> {
+    pub fn unwrap_types(self) -> Stmt<T> {
+        match self {
+            Self::Expr(stmt) => return Stmt::Expr(stmt.unwrap_types()),
+            Self::VarDecl(stmt) => return Stmt::VarDecl(stmt.unwrap_types()),
+            Self::Assignment(stmt) => return Stmt::Assignment(stmt.unwrap_types()),
+            Self::For(stmt) => return Stmt::For(stmt.unwrap_types()),
+            Self::If(stmt) => return Stmt::If(stmt.unwrap_types()),
+            Self::Return(stmt) => return Stmt::Return(stmt.unwrap_types()),
+        }
+    }
 }
 
 impl AstId for Stmt {
@@ -24,17 +50,57 @@ impl AstId for Stmt {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct ExprStmt {
+pub struct ExprStmt<TypeInfo = ()> {
     pub id: Id,
-    pub expr: ast::Expr,
+    pub expr: ast::Expr<TypeInfo>,
+}
+
+impl ExprStmt<()> {
+    pub fn init_types<T>(self) -> ExprStmt<Option<T>> {
+        return ExprStmt {
+            id: self.id,
+            expr: self.expr.init_types(),
+        };
+    }
+}
+
+impl<T> ExprStmt<Option<T>> {
+    pub fn unwrap_types(self) -> ExprStmt<T> {
+        return ExprStmt {
+            id: self.id,
+            expr: self.expr.unwrap_types(),
+        };
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct VarDeclStmt {
+pub struct VarDeclStmt<TypeInfo = ()> {
     pub id: Id,
     pub var_decl_type: VarDeclType,
-    pub lhs: VarAssignPattern,
-    pub value: Option<ast::Expr>,
+    pub lhs: VarAssignPattern<TypeInfo>,
+    pub value: Option<ast::Expr<TypeInfo>>,
+}
+
+impl VarDeclStmt<()> {
+    pub fn init_types<T>(self) -> VarDeclStmt<Option<T>> {
+        return VarDeclStmt {
+            id: self.id,
+            var_decl_type: self.var_decl_type,
+            lhs: self.lhs.init_types(),
+            value: self.value.map(|v| v.init_types()),
+        };
+    }
+}
+
+impl<T> VarDeclStmt<Option<T>> {
+    pub fn unwrap_types(self) -> VarDeclStmt<T> {
+        return VarDeclStmt {
+            id: self.id,
+            var_decl_type: self.var_decl_type,
+            lhs: self.lhs.unwrap_types(),
+            value: self.value.map(|v| v.unwrap_types()),
+        };
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -44,44 +110,174 @@ pub enum VarDeclType {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct AssignmentStmt {
+pub struct AssignmentStmt<TypeInfo = ()> {
     pub id: Id,
-    pub lhs: AssignmentLHS,
+    pub lhs: AssignmentLHS<TypeInfo>,
     pub op: (AssignOp, token::Token),
-    pub value: ast::Expr,
+    pub value: ast::Expr<TypeInfo>,
+}
+
+impl AssignmentStmt<()> {
+    pub fn init_types<T>(self) -> AssignmentStmt<Option<T>> {
+        return AssignmentStmt {
+            id: self.id,
+            lhs: self.lhs.init_types(),
+            op: self.op,
+            value: self.value.init_types(),
+        };
+    }
+}
+
+impl<T> AssignmentStmt<Option<T>> {
+    pub fn unwrap_types(self) -> AssignmentStmt<T> {
+        return AssignmentStmt {
+            id: self.id,
+            lhs: self.lhs.unwrap_types(),
+            op: self.op,
+            value: self.value.unwrap_types(),
+        };
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum AssignmentLHS {
-    VarAssignPattern(ast::VarAssignPattern),
-    Get(ast::GetExpr),
+pub enum AssignmentLHS<TypeInfo = ()> {
+    VarAssignPattern(ast::VarAssignPattern<TypeInfo>),
+    Get(ast::GetExpr<TypeInfo>),
+}
+
+impl AssignmentLHS<()> {
+    pub fn init_types<T>(self) -> AssignmentLHS<Option<T>> {
+        match self {
+            Self::VarAssignPattern(p) => return AssignmentLHS::VarAssignPattern(p.init_types()),
+            Self::Get(p) => return AssignmentLHS::Get(p.init_types()),
+        }
+    }
+}
+
+impl<T> AssignmentLHS<Option<T>> {
+    pub fn unwrap_types(self) -> AssignmentLHS<T> {
+        match self {
+            Self::VarAssignPattern(p) => return AssignmentLHS::VarAssignPattern(p.unwrap_types()),
+            Self::Get(p) => return AssignmentLHS::Get(p.unwrap_types()),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct ForStmt {
+pub struct ForStmt<TypeInfo = ()> {
     pub id: Id,
-    pub assignment_pattern: ast::VarAssignPattern,
-    pub iter: ast::Expr,
-    pub body: Vec<Stmt>,
+    pub assignment_pattern: ast::VarAssignPattern<TypeInfo>,
+    pub iter: ast::Expr<TypeInfo>,
+    pub body: Vec<Stmt<TypeInfo>>,
+}
+
+impl ForStmt<()> {
+    pub fn init_types<T>(self) -> ForStmt<Option<T>> {
+        return ForStmt {
+            id: self.id,
+            assignment_pattern: self.assignment_pattern.init_types(),
+            iter: self.iter.init_types(),
+            body: self.body.into_iter().map(|s| s.init_types()).collect(),
+        };
+    }
+}
+
+impl<T> ForStmt<Option<T>> {
+    pub fn unwrap_types(self) -> ForStmt<T> {
+        return ForStmt {
+            id: self.id,
+            assignment_pattern: self.assignment_pattern.unwrap_types(),
+            iter: self.iter.unwrap_types(),
+            body: self.body.into_iter().map(|s| s.unwrap_types()).collect(),
+        };
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum VarAssignPattern {
-    Identity(ast::IdentityExpr),
+pub enum VarAssignPattern<TypeInfo = ()> {
+    Identity(ast::IdentityExpr<TypeInfo>),
+}
+
+impl VarAssignPattern<()> {
+    pub fn init_types<T>(self) -> VarAssignPattern<Option<T>> {
+        match self {
+            Self::Identity(p) => return VarAssignPattern::Identity(p.init_types()),
+        }
+    }
+}
+
+impl<T> VarAssignPattern<Option<T>> {
+    pub fn unwrap_types(self) -> VarAssignPattern<T> {
+        match self {
+            Self::Identity(p) => return VarAssignPattern::Identity(p.unwrap_types()),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct IfStmt {
+pub struct IfStmt<TypeInfo = ()> {
     pub id: Id,
-    pub condition: ast::Expr,
-    pub then_branch: Vec<Stmt>,
-    pub else_branch: Option<ElseBranch>,
+    pub condition: ast::Expr<TypeInfo>,
+    pub then_branch: Vec<Stmt<TypeInfo>>,
+    pub else_branch: Option<ElseBranch<TypeInfo>>,
+}
+
+impl IfStmt<()> {
+    pub fn init_types<T>(self) -> IfStmt<Option<T>> {
+        return IfStmt {
+            id: self.id,
+            condition: self.condition.init_types(),
+            then_branch: self
+                .then_branch
+                .into_iter()
+                .map(|s| s.init_types())
+                .collect(),
+            else_branch: self.else_branch.map(|e| e.init_types()),
+        };
+    }
+}
+
+impl<T> IfStmt<Option<T>> {
+    pub fn unwrap_types(self) -> IfStmt<T> {
+        return IfStmt {
+            id: self.id,
+            condition: self.condition.unwrap_types(),
+            then_branch: self
+                .then_branch
+                .into_iter()
+                .map(|s| s.unwrap_types())
+                .collect(),
+            else_branch: self.else_branch.map(|e| e.unwrap_types()),
+        };
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum ElseBranch {
-    ElseIf(Box<IfStmt>),
-    Block(Vec<Stmt>),
+pub enum ElseBranch<TypeInfo = ()> {
+    ElseIf(Box<IfStmt<TypeInfo>>),
+    Block(Vec<Stmt<TypeInfo>>),
+}
+
+impl ElseBranch<()> {
+    pub fn init_types<T>(self) -> ElseBranch<Option<T>> {
+        match self {
+            Self::ElseIf(b) => return ElseBranch::ElseIf(Box::new(b.init_types())),
+            Self::Block(b) => {
+                return ElseBranch::Block(b.into_iter().map(|s| s.init_types()).collect())
+            }
+        }
+    }
+}
+
+impl<T> ElseBranch<Option<T>> {
+    pub fn unwrap_types(self) -> ElseBranch<T> {
+        match self {
+            Self::ElseIf(b) => return ElseBranch::ElseIf(Box::new(b.unwrap_types())),
+            Self::Block(b) => {
+                return ElseBranch::Block(b.into_iter().map(|s| s.unwrap_types()).collect())
+            }
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -91,9 +287,27 @@ pub enum AssignOp {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct ReturnStmt {
+pub struct ReturnStmt<TypeInfo = ()> {
     pub id: Id,
-    pub value: Option<ast::Expr>,
+    pub value: Option<ast::Expr<TypeInfo>>,
+}
+
+impl ReturnStmt<()> {
+    pub fn init_types<T>(self) -> ReturnStmt<Option<T>> {
+        return ReturnStmt {
+            id: self.id,
+            value: self.value.map(|v| v.init_types()),
+        };
+    }
+}
+
+impl<T> ReturnStmt<Option<T>> {
+    pub fn unwrap_types(self) -> ReturnStmt<T> {
+        return ReturnStmt {
+            id: self.id,
+            value: self.value.map(|v| v.unwrap_types()),
+        };
+    }
 }
 
 // Visitor pattern
