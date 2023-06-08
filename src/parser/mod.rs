@@ -136,7 +136,6 @@ impl Parser {
         let mut path = ast::StaticUsePath {
             name,
             nexts: vec![],
-            type_info: (),
         };
 
         while self.match_any(&[token::TokenType::ColonColon], WithNewlines::One) {
@@ -533,7 +532,6 @@ impl Parser {
                 left: Box::new(expr),
                 operator,
                 right: Box::new(right),
-                type_info: (),
             });
         }
 
@@ -552,7 +550,6 @@ impl Parser {
                 left: Box::new(expr),
                 operator,
                 right: Box::new(right),
-                type_info: (),
             });
         }
 
@@ -587,7 +584,6 @@ impl Parser {
                 left: Box::new(expr),
                 op,
                 right: Box::new(right),
-                type_info: (),
             });
         }
 
@@ -629,7 +625,6 @@ impl Parser {
                 left: Box::new(expr),
                 op,
                 right: Box::new(right),
-                type_info: (),
             });
         }
 
@@ -659,7 +654,6 @@ impl Parser {
                 left: Box::new(expr),
                 op,
                 right: Box::new(right),
-                type_info: (),
             });
         }
 
@@ -694,7 +688,6 @@ impl Parser {
                 left: Box::new(expr),
                 op,
                 right: Box::new(right),
-                type_info: (),
             });
         }
 
@@ -729,7 +722,6 @@ impl Parser {
                 left: Box::new(expr),
                 op,
                 right: Box::new(right),
-                type_info: (),
             });
         }
 
@@ -759,7 +751,6 @@ impl Parser {
                 left: Box::new(expr),
                 op,
                 right: Box::new(right),
-                type_info: (),
             });
         }
 
@@ -791,7 +782,6 @@ impl Parser {
                 id: self.ast_id(),
                 op,
                 right: Box::new(right),
-                type_info: (),
             }));
         }
 
@@ -812,7 +802,6 @@ impl Parser {
                     id: self.ast_id(),
                     object: Box::new(expr),
                     name,
-                    type_info: (),
                 });
             } else {
                 break;
@@ -852,7 +841,6 @@ impl Parser {
             id: self.ast_id(),
             callee: Box::new(callee),
             arguments,
-            type_info: (),
         }));
     }
 
@@ -882,7 +870,6 @@ impl Parser {
                     id: self.ast_id(),
                     literal_type,
                     token: t,
-                    type_info: (),
                 }));
             }
 
@@ -937,7 +924,6 @@ impl Parser {
                     id: self.ast_id(),
                     open: open_token,
                     parts,
-                    type_info: (),
                 }));
             }
 
@@ -950,7 +936,6 @@ impl Parser {
                 return Ok(ast::Expr::SelfVal(ast::SelfValExpr {
                     id: self.ast_id(),
                     keyword: t,
-                    type_info: (),
                 }));
             }
 
@@ -963,7 +948,6 @@ impl Parser {
                 return Ok(ast::Expr::Identity(ast::IdentityExpr {
                     id: self.ast_id(),
                     name: t,
-                    type_info: (),
                 }));
             }
 
@@ -987,24 +971,18 @@ impl Parser {
                 &token::TokenType::Identifier,
                 "TODO: Handle more complicated assignment patterns",
             )?,
-            type_info: (),
         }));
     }
 
     fn static_path(&mut self) -> Result<ast::StaticPath> {
         let mut name = self.consume(&token::TokenType::Identifier, "Expect type reference")?;
-        let mut path = ast::StaticPath {
-            root: None,
-            name,
-            type_info: (),
-        };
+        let mut path = ast::StaticPath { root: None, name };
 
         while self.match_any(&[token::TokenType::ColonColon], WithNewlines::None) {
             name = self.consume(&token::TokenType::Identifier, "Expect type reference")?;
             path = ast::StaticPath {
                 root: Some(Box::new(path)),
                 name,
-                type_info: (),
             };
         }
 

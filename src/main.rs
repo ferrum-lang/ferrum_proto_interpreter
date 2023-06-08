@@ -11,7 +11,6 @@ mod runtime_value;
 mod scanner;
 mod span;
 mod token;
-mod typer;
 mod utils;
 
 pub use config::Config;
