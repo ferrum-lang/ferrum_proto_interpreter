@@ -5,22 +5,26 @@ use runtime_value as rt;
 use token;
 
 use std::cell::RefCell;
+use std::fmt;
 use std::rc::Rc;
 
 use std::collections::HashMap;
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct SharedEnvironment {
-    pub inner: Rc<RefCell<Environment>>,
+pub struct SharedEnvironment<Val> {
+    pub inner: Rc<RefCell<Environment<Val>>>,
 }
 
 #[derive(Debug, PartialEq)]
-pub struct Environment {
-    enclosing: Option<SharedEnvironment>,
-    values: HashMap<String, rt::RuntimeValue>,
+pub struct Environment<Val> {
+    enclosing: Option<SharedEnvironment<Val>>,
+    values: HashMap<String, Val>,
 }
 
-impl SharedEnvironment {
+impl<Val> SharedEnvironment<Val>
+where
+    Val: fmt::Debug + Clone + PartialEq,
+{
     pub fn new() -> Self {
         return Self {
             inner: Rc::new(RefCell::new(Environment::new())),
@@ -33,7 +37,7 @@ impl SharedEnvironment {
         };
     }
 
-    pub fn enclosed(self) -> Environment {
+    pub fn enclosed(self) -> Environment<Val> {
         return Environment {
             enclosing: Some(self),
             values: HashMap::new(),
@@ -46,11 +50,15 @@ impl SharedEnvironment {
         };
     }
 
-    pub fn define(&self, name: String, value: rt::RuntimeValue) {
+    pub fn define(&self, name: String, value: Val) {
         self.inner.borrow_mut().define(name, value);
     }
 
-    pub fn get_at(&self, distance: resolver::Distance, name: &token::Token) -> rt::RuntimeResult {
+    pub fn get_at(
+        &self,
+        distance: resolver::Distance,
+        name: &token::Token,
+    ) -> rt::RuntimeResult<Val> {
         return self
             .share()
             .ancestor(distance)
@@ -65,7 +73,7 @@ impl SharedEnvironment {
             });
     }
 
-    pub fn get(&self, name: &token::Token) -> rt::RuntimeResult {
+    pub fn get(&self, name: &token::Token) -> rt::RuntimeResult<Val> {
         return self.inner.borrow().get(name);
     }
 
@@ -91,7 +99,10 @@ impl SharedEnvironment {
     }
 }
 
-impl Environment {
+impl<Val> Environment<Val>
+where
+    Val: fmt::Debug + Clone + PartialEq,
+{
     pub fn new() -> Self {
         return Self {
             enclosing: None,
@@ -99,11 +110,11 @@ impl Environment {
         };
     }
 
-    pub fn define(&mut self, name: String, value: rt::RuntimeValue) {
+    pub fn define(&mut self, name: String, value: Val) {
         self.values.insert(name, value);
     }
 
-    pub fn get(&self, name: &token::Token) -> rt::RuntimeResult {
+    pub fn get(&self, name: &token::Token) -> rt::RuntimeResult<Val> {
         if let Some(value) = self.values.get(&name.lexeme) {
             return Ok(value.clone());
         }
@@ -118,7 +129,7 @@ impl Environment {
         });
     }
 
-    pub fn assign(&mut self, name: token::Token, value: rt::RuntimeValue) -> rt::RuntimeResult<()> {
+    pub fn assign(&mut self, name: token::Token, value: Val) -> rt::RuntimeResult<()> {
         if self.values.contains_key(&name.lexeme) {
             self.values.insert(name.lexeme, value);
             return Ok(());

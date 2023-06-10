@@ -2,7 +2,8 @@ use fe::print
 
 pub safe fn main()
 	const name = "Adam"
+	const age = "26"
 	
-	print("Hello {name}!")
+	print("Hello {age} year old named {name}!")
 ;
 

@@ -1,6 +1,7 @@
 use super::*;
 
 use runtime_value as rt;
+use type_checker as tc;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct ErrorContext {
@@ -43,6 +44,16 @@ impl ErrorContext {
         } else {
             self.report(t.span, format!(" at '{}'", t.lexeme), message.into());
         }
+    }
+
+    pub fn type_error(&mut self, err: tc::TypeError) {
+        eprintln!("{err}");
+
+        self.error_reports.push(ErrorReport {
+            span: Span::new(),
+            where_: String::new(),
+            message: format!("{err}"),
+        });
     }
 
     pub fn runtime_error(&mut self, err: rt::RuntimeError) {

@@ -11,12 +11,12 @@ use std::collections::HashMap;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Interpreter {
-    pub globals: env::SharedEnvironment,
+    pub globals: env::SharedEnvironment<rt::RuntimeValue>,
 
     ast: ast::AST,
     locals: HashMap<ast::Id, resolver::Distance>,
 
-    environment: env::SharedEnvironment,
+    environment: env::SharedEnvironment<rt::RuntimeValue>,
     error_ctx: ErrorContext,
     main_fn: Option<rt::FerrumFunction>,
 }
@@ -75,22 +75,22 @@ impl Interpreter {
         return self.error_ctx;
     }
 
-    pub fn declare(&mut self, decl: &ast::Decl) -> rt::RuntimeResult<()> {
+    fn declare(&mut self, decl: &ast::Decl) -> rt::RuntimeResult<()> {
         return decl.accept(self);
     }
 
-    pub fn execute(&mut self, stmt: &ast::Stmt) -> rt::RuntimeResult<()> {
+    fn execute(&mut self, stmt: &ast::Stmt) -> rt::RuntimeResult<()> {
         return stmt.accept(self);
     }
 
-    pub fn evaluate(&mut self, expr: &ast::Expr) -> rt::RuntimeResult {
+    fn evaluate(&mut self, expr: &ast::Expr) -> rt::RuntimeResult {
         return expr.accept(self);
     }
 
     pub fn execute_block(
         &mut self,
         stmts: &Vec<ast::Stmt>,
-        environment: env::SharedEnvironment,
+        environment: env::SharedEnvironment<rt::RuntimeValue>,
     ) -> rt::RuntimeResult<()> {
         let previous = self.environment.share();
 

@@ -6,19 +6,12 @@ use crate::runtime_value as rt;
 #[derive(Debug, Clone, PartialEq)]
 pub struct FerrumFunction {
     pub decl: ast::FunctionDecl,
-    pub closure: env::SharedEnvironment,
+    pub closure: env::SharedEnvironment<rt::RuntimeValue>,
 }
 
 impl FerrumFunction {
-    pub fn new(decl: ast::FunctionDecl, closure: env::SharedEnvironment) -> Self {
+    pub fn new(decl: ast::FunctionDecl, closure: env::SharedEnvironment<rt::RuntimeValue>) -> Self {
         return Self { decl, closure };
-    }
-
-    pub fn bind(&self, instance: FerrumInstance) -> Self {
-        let environment = self.closure.share().shared_enclosed();
-        environment.define("this".to_string(), RuntimeValue::Instance(instance));
-
-        return Self::new(self.decl.clone(), environment);
     }
 }
 
