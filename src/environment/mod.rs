@@ -77,6 +77,25 @@ where
         return self.inner.borrow().get(name);
     }
 
+    pub fn assign_at(
+        &self,
+        distance: resolver::Distance,
+        name: token::Token,
+        value: Val,
+    ) -> rt::RuntimeResult<()> {
+        let this = self.share().ancestor(distance).inner;
+
+        if this.borrow().values.contains_key(&name.lexeme) {
+            this.borrow_mut().values.insert(name.lexeme, value);
+            return Ok(());
+        }
+
+        return Err(rt::RuntimeError::UndefinedVariable {
+            name: name.clone(),
+            details: Some(format!("Cannot assign [{value:?}] to undefined variable")),
+        });
+    }
+
     fn ancestor(self, distance: resolver::Distance) -> Self {
         let mut env = self;
 

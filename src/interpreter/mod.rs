@@ -284,7 +284,21 @@ impl StmtVisitor<rt::RuntimeResult<()>> for Interpreter {
     }
 
     fn visit_assignment_stmt(&mut self, stmt: &ast::AssignmentStmt) -> rt::RuntimeResult<()> {
-        todo!()
+        let value = self.evaluate(&stmt.value)?;
+
+        match &stmt.lhs {
+            ast::AssignmentLHS::Var(v) => {
+                let Some(distance) = self.locals.get(&stmt.id) else {
+                    return Err(rt::RuntimeError::UndefinedVariable { name: v.name.clone(), details: None });
+                };
+
+                self.environment
+                    .assign_at(*distance, v.name.clone(), value)?;
+            }
+            ast::AssignmentLHS::Get(_) => unimplemented!(),
+        }
+
+        return Ok(());
     }
 
     fn visit_var_decl_stmt(&mut self, stmt: &ast::VarDeclStmt) -> rt::RuntimeResult<()> {

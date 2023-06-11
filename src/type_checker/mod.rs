@@ -107,6 +107,10 @@ impl<'a> TypeChecker<'a> {
     }
 
     fn is_compatible(&self, val: &TypeInfo, dest: &TypeInfo) -> bool {
+        if *dest == TypeInfo::Nil {
+            return true;
+        }
+
         return val == dest;
     }
 
@@ -133,9 +137,15 @@ impl<'a> TypeChecker<'a> {
     fn define_lhs(&mut self, lhs: &ast::VarAssignPattern, value: TypeInfo) -> TypeResult<()> {
         match lhs {
             ast::VarAssignPattern::Identity(name) => {
-                self.environment.define(name.name.lexeme.clone(), value)
+                self.define_var(name, value)?;
             }
         }
+
+        return Ok(());
+    }
+
+    fn define_var(&mut self, var: &ast::IdentityExpr, value: TypeInfo) -> TypeResult<()> {
+        self.environment.define(var.name.lexeme.clone(), value);
 
         return Ok(());
     }
@@ -189,7 +199,29 @@ impl<'a> ast::StmtVisitor<TypeResult<()>> for TypeChecker<'a> {
     }
 
     fn visit_assignment_stmt(&mut self, stmt: &ast::AssignmentStmt) -> TypeResult<()> {
-        unimplemented!()
+        let next = self.evaluate(&stmt.value)?;
+
+        match &stmt.lhs {
+            ast::AssignmentLHS::Var(v) => {
+                let prev = self.look_up_variable(&v.name, &v.id)?;
+
+                if self.is_compatible(&next, &prev) {
+                    self.define_var(v, next)?;
+                } else {
+                    self.error_ctx.type_error(TypeError::TypeMismatch {
+                        details: Some(format!(
+                            "Cannot assign {:?} of type {next:?} to {:?} of type {prev:?}.",
+                            stmt.value, v.name
+                        )),
+                    });
+                }
+            }
+            ast::AssignmentLHS::Get(g) => {
+                unimplemented!()
+            }
+        }
+
+        return Ok(());
     }
 
     fn visit_for_stmt(&mut self, stmt: &ast::ForStmt) -> TypeResult<()> {

@@ -1,9 +1,15 @@
 use fe::print
 
 pub safe fn main()
-	const name = "Adam"
-	const age = "26"
+	const name
+	mut age = "26"
+
+	name = "Adam"
 	
+	print("Hello {age} year old named {name}!")
+
+	age = "27"
+
 	print("Hello {age} year old named {name}!")
 ;
 

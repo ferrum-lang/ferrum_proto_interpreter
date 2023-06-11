@@ -485,9 +485,7 @@ impl Parser {
             };
 
             let lhs = match expr {
-                ast::Expr::Identity(expr) => {
-                    ast::AssignmentLHS::VarAssignPattern(ast::VarAssignPattern::Identity(expr))
-                }
+                ast::Expr::Identity(expr) => ast::AssignmentLHS::Var(expr),
                 ast::Expr::Get(expr) => ast::AssignmentLHS::Get(expr),
 
                 _ => {

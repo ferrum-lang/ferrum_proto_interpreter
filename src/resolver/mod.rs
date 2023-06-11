@@ -220,7 +220,7 @@ impl ast::StmtVisitor for Resolver<'_> {
 
         match &stmt.lhs {
             ast::AssignmentLHS::Get(expr) => self.visit_get_expr(&expr),
-            ast::AssignmentLHS::VarAssignPattern(ast::VarAssignPattern::Identity(expr)) => {
+            ast::AssignmentLHS::Var(expr) => {
                 self.visit_identity_expr(&expr);
                 self.resolve_local(stmt.id, &expr.name);
             }

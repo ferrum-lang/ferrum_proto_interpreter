@@ -53,7 +53,7 @@ pub struct AssignmentStmt {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum AssignmentLHS {
-    VarAssignPattern(ast::VarAssignPattern),
+    Var(ast::IdentityExpr),
     Get(ast::GetExpr),
 }
 
