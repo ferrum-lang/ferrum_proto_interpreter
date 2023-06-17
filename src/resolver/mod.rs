@@ -151,6 +151,10 @@ impl ast::ExprVisitor for Resolver<'_> {
         }
     }
 
+    fn visit_crash_expr(&mut self, expr: &ast::CrashExpr) -> () {
+        // NO-OP
+    }
+
     fn visit_get_expr(&mut self, expr: &ast::GetExpr) -> () {
         self.resolve_expr(&expr.object);
     }

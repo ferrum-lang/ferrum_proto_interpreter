@@ -1,6 +1,6 @@
 use fe::print
 
-safe fn main()
+pub norm fn main()
 	for n in 0..100
 		print(fizzbuzz(n))
 	;

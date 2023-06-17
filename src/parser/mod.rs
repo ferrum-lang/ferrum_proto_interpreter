@@ -97,9 +97,10 @@ impl Parser {
 
             {
                 let fn_mod = match self.peek().map(|t| &t.token_type) {
+                    Some(token::TokenType::Norm) => Some(ast::FnMod::Norm),
                     Some(token::TokenType::Pure) => Some(ast::FnMod::Pure),
+                    Some(token::TokenType::Risk) => Some(ast::FnMod::Risk),
                     Some(token::TokenType::Safe) => Some(ast::FnMod::Safe),
-                    Some(token::TokenType::Unsafe) => Some(ast::FnMod::Unsafe),
                     _ => None,
                 };
 
@@ -949,6 +950,34 @@ impl Parser {
                 }));
             }
 
+            Some(token::Token {
+                token_type: token::TokenType::Crash,
+                mut span,
+                ..
+            }) => {
+                let error = if let Some(token::Token {
+                    token_type: token::TokenType::Newline,
+                    ..
+                }) = self.peek()
+                {
+                    None
+                } else {
+                    let error = self.expression()?;
+
+                    if let Some(prev) = self.previous() {
+                        span.end = prev.span.end.clone();
+                    }
+
+                    Some(Box::new(error))
+                };
+
+                return Ok(ast::Expr::Crash(ast::CrashExpr {
+                    id: self.ast_id(),
+                    error,
+                    span,
+                }));
+            }
+
             Some(peek) => {
                 return Err(self.error(
                     format!("[{}:{}] Expected some expression.", file!(), line!()),
@@ -1078,11 +1107,13 @@ impl Parser {
             if let Some(peek) = self.peek() {
                 match peek.token_type {
                     token::TokenType::Const
+                    | token::TokenType::Crash
                     | token::TokenType::For
                     | token::TokenType::Fn
+                    | token::TokenType::Norm
                     | token::TokenType::Pure
+                    | token::TokenType::Risk
                     | token::TokenType::Safe
-                    | token::TokenType::Unsafe
                     | token::TokenType::If
                     | token::TokenType::Impl
                     | token::TokenType::Match

@@ -56,7 +56,13 @@ impl<'a> TypeChecker<'a> {
                 self.error_ctx.type_error(TypeError::TypeMismatch {
                     details: Some(format!("Main function must be public")),
                 });
-            };
+            }
+
+            if let Some(ast::FnMod::Safe | ast::FnMod::Pure) = main_fn.fn_mod {
+                self.error_ctx.type_error(TypeError::TypeMismatch {
+                    details: Some(format!("Main function cannot be safe or pure")),
+                })
+            }
         } else {
             self.error_ctx.type_error(TypeError::TypeMismatch {
                 details: Some(format!("Main function not found!")),
@@ -273,6 +279,10 @@ impl<'a> ast::ExprVisitor<TypeResult> for TypeChecker<'a> {
         };
 
         return Ok(ret);
+    }
+
+    fn visit_crash_expr(&mut self, _: &ast::CrashExpr) -> TypeResult {
+        return Ok(TypeInfo::Nil);
     }
 
     fn visit_get_expr(&mut self, expr: &ast::GetExpr) -> TypeResult {

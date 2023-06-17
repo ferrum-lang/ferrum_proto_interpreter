@@ -5,6 +5,7 @@ use crate::token;
 #[derive(Debug, Clone, PartialEq)]
 pub enum Expr {
     Call(CallExpr),
+    Crash(CrashExpr),
     Get(GetExpr),
     Identity(IdentityExpr),
     PlainLiteral(PlainLiteralExpr),
@@ -19,6 +20,7 @@ impl AstId for Expr {
     fn id(&self) -> &Id {
         match self {
             Self::Call(expr) => return &expr.id,
+            Self::Crash(expr) => return &expr.id,
             Self::Get(expr) => return &expr.id,
             Self::Identity(expr) => return &expr.id,
             Self::PlainLiteral(expr) => return &expr.id,
@@ -36,6 +38,13 @@ pub struct CallExpr {
     pub id: Id,
     pub callee: Box<Expr>,
     pub arguments: Vec<Expr>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct CrashExpr {
+    pub id: Id,
+    pub error: Option<Box<Expr>>,
+    pub span: Span,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -136,6 +145,7 @@ pub enum BinaryOp {
 // Visitor pattern
 pub trait ExprVisitor<R = ()> {
     fn visit_call_expr(&mut self, expr: &CallExpr) -> R;
+    fn visit_crash_expr(&mut self, expr: &CrashExpr) -> R;
     fn visit_get_expr(&mut self, expr: &GetExpr) -> R;
     fn visit_identity_expr(&mut self, expr: &IdentityExpr) -> R;
     fn visit_plain_literal_expr(&mut self, expr: &PlainLiteralExpr) -> R;
@@ -154,6 +164,7 @@ impl<R, V: ExprVisitor<R>> ExprAccept<R, V> for Expr {
     fn accept(&self, visitor: &mut V) -> R {
         return match self {
             Self::Call(expr) => expr.accept(visitor),
+            Self::Crash(expr) => expr.accept(visitor),
             Self::Get(expr) => expr.accept(visitor),
             Self::Identity(expr) => expr.accept(visitor),
             Self::PlainLiteral(expr) => expr.accept(visitor),
@@ -169,6 +180,12 @@ impl<R, V: ExprVisitor<R>> ExprAccept<R, V> for Expr {
 impl<R, V: ExprVisitor<R>> ExprAccept<R, V> for CallExpr {
     fn accept(&self, visitor: &mut V) -> R {
         return visitor.visit_call_expr(self);
+    }
+}
+
+impl<R, V: ExprVisitor<R>> ExprAccept<R, V> for CrashExpr {
+    fn accept(&self, visitor: &mut V) -> R {
+        return visitor.visit_crash_expr(self);
     }
 }
 

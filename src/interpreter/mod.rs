@@ -360,6 +360,17 @@ impl ExprVisitor<rt::RuntimeResult> for Interpreter {
         return function.call(self, arguments);
     }
 
+    fn visit_crash_expr(&mut self, expr: &ast::CrashExpr) -> rt::RuntimeResult {
+        panic!(
+            r#"Program Crashed! "{}" at {:?}"#,
+            expr.error
+                .as_ref()
+                .map(|e| self.evaluate(&e).unwrap().to_string())
+                .unwrap_or(String::new()),
+            expr.span
+        )
+    }
+
     fn visit_get_expr(&mut self, expr: &ast::GetExpr) -> rt::RuntimeResult {
         todo!()
     }

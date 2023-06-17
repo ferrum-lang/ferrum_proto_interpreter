@@ -89,6 +89,7 @@ pub enum TokenType {
     And,
     As,
     Const,
+    Crash, // CRASH!
     Else,
     False,
     Fn,
@@ -98,10 +99,12 @@ pub enum TokenType {
     In,
     Match,
     Mut,
+    Norm,
     Or,
     Pub,
     Pure,
     Return,
+    Risk,
     Safe,
     SelfVal,  // self
     SelfType, // Self
@@ -109,7 +112,6 @@ pub enum TokenType {
     Trait,
     True,
     Type,
-    Unsafe,
     Use,
     While,
     Yield,

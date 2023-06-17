@@ -12,6 +12,7 @@ lazy_static::lazy_static! {
         keywords.insert("and".to_string(), token::TokenType::And);
         keywords.insert("as".to_string(), token::TokenType::As);
         keywords.insert("const".to_string(), token::TokenType::Const);
+        keywords.insert("CRASH!".to_string(), token::TokenType::Crash);
         keywords.insert("else".to_string(), token::TokenType::Else);
         keywords.insert("false".to_string(), token::TokenType::False);
         keywords.insert("fn".to_string(), token::TokenType::Fn);
@@ -21,10 +22,12 @@ lazy_static::lazy_static! {
         keywords.insert("in".to_string(), token::TokenType::In);
         keywords.insert("match".to_string(), token::TokenType::Match);
         keywords.insert("mut".to_string(), token::TokenType::Mut);
+        keywords.insert("norm".to_string(), token::TokenType::Norm);
         keywords.insert("or".to_string(), token::TokenType::Or);
         keywords.insert("pub".to_string(), token::TokenType::Pub);
         keywords.insert("pure".to_string(), token::TokenType::Pure);
         keywords.insert("return".to_string(), token::TokenType::Return);
+        keywords.insert("risk".to_string(), token::TokenType::Risk);
         keywords.insert("safe".to_string(), token::TokenType::Safe);
         keywords.insert("self".to_string(), token::TokenType::SelfVal);
         keywords.insert("Self".to_string(), token::TokenType::SelfType);
@@ -32,7 +35,6 @@ lazy_static::lazy_static! {
         keywords.insert("trait".to_string(), token::TokenType::Trait);
         keywords.insert("true".to_string(), token::TokenType::True);
         keywords.insert("type".to_string(), token::TokenType::Type);
-        keywords.insert("unsafe".to_string(), token::TokenType::Unsafe);
         keywords.insert("use".to_string(), token::TokenType::Use);
         keywords.insert("while".to_string(), token::TokenType::While);
         keywords.insert("yield".to_string(), token::TokenType::Yield);
@@ -404,7 +406,12 @@ impl Scanner {
             self.advance();
         }
 
-        let text = &self.source[self.span.start.index..self.span.end.index];
+        let mut text = &self.source[self.span.start.index..self.span.end.index];
+
+        if text == "CRASH" && self.peek() == Some('!') {
+            self.advance();
+            text = &self.source[self.span.start.index..self.span.end.index];
+        }
 
         return KEYWORDS
             .get(text)
