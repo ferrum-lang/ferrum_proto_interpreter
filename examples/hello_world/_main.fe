@@ -1,19 +1,27 @@
 use fe::print
 
-pub norm fn main()
-	const name
-	mut age = "26"
+pub fn main()
+	// const name
+	// mut age = "26"
 
-	name = "Adam"
+	// name = "Adam"
 	
-	print("Hello {age} year old named {name}!")
+	// print("Hello {age} year old named {name}!")
 
-	age = "27"
+	// age = "27"
 
-	print("Hello {age} year old named {name}!")
-
-	CRASH! "todo"
+	// print("Hello {age} year old named {name}!")
 	
-	print("secrets...")
+	say_hi()
+;
+
+fn say_hi()
+	print("Hi")
+
+	test()
+;
+
+fn test()
+	print("test")
 ;
 

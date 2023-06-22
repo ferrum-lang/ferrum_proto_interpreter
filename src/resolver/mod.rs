@@ -28,6 +28,7 @@ pub struct Resolver<'a> {
     scopes: Vec<HashMap<String, bool>>,
     current_function: FunctionType,
     current_struct: StructType,
+    fns_to_resolve: Vec<(ast::FunctionDecl, FunctionType)>,
     error_ctx: ErrorContext,
 }
 
@@ -40,6 +41,7 @@ impl<'a> Resolver<'a> {
             scopes: Vec::new(),
             current_function: FunctionType::None,
             current_struct: StructType::None,
+            fns_to_resolve: vec![],
             error_ctx: ErrorContext::new(),
         };
     }
@@ -51,9 +53,17 @@ impl<'a> Resolver<'a> {
     }
 
     fn resolve_decls(&mut self, decls: &Vec<ast::Decl>) {
+        self.begin_scope();
+
         for decl in decls {
             self.resolve_decl(decl);
         }
+
+        for (decl, function_type) in self.fns_to_resolve.clone() {
+            self.resolve_function(&decl, function_type);
+        }
+
+        self.end_scope();
     }
 
     fn resolve_decl(&mut self, decl: &ast::Decl) {
@@ -264,6 +274,8 @@ impl ast::DeclVisitor for Resolver<'_> {
     fn visit_function_decl(&mut self, decl: &ast::FunctionDecl) -> () {
         self.declare(&decl.name);
         self.define(&decl.name);
-        self.resolve_function(&decl, FunctionType::Function);
+        // self.resolve_function(&decl, FunctionType::Function);
+        self.fns_to_resolve
+            .push((decl.clone(), FunctionType::Function));
     }
 }

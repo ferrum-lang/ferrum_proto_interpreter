@@ -22,6 +22,8 @@ pub struct TypeChecker<'a> {
     environment: env::SharedEnvironment<TypeInfo>,
     error_ctx: ErrorContext,
     main_fn: Option<ast::FunctionDecl>,
+    known_fn_mod: Option<ast::FnMod>,
+    fns_to_eval: Vec<(FunctionTypeInfo, ast::FunctionDecl)>,
 }
 
 impl<'a> TypeChecker<'a> {
@@ -36,6 +38,8 @@ impl<'a> TypeChecker<'a> {
             environment: env::SharedEnvironment::new(),
             error_ctx: ErrorContext::new(),
             main_fn: None,
+            known_fn_mod: None,
+            fns_to_eval: vec![],
         };
     }
 
@@ -48,6 +52,29 @@ impl<'a> TypeChecker<'a> {
                 }
                 _ => {}
             }
+        }
+
+        for (mut function, decl) in self.fns_to_eval.clone() {
+            self.known_fn_mod = decl.fn_mod.clone();
+
+            match self.execute_body(&decl.body, self.environment.share().shared_enclosed()) {
+                Err(e) => {
+                    self.error_ctx.type_error(e);
+                    break;
+                }
+                _ => {}
+            }
+
+            if function.known_fn_mod.is_none() {
+                function.known_fn_mod = self.known_fn_mod.take();
+            } else {
+                self.known_fn_mod = None;
+            }
+
+            self.environment.define(
+                function.name.clone(),
+                TypeInfo::Callable(CallableTypeInfo::Function(function)),
+            );
         }
 
         if let Some(main_fn) = self.main_fn {
@@ -128,11 +155,13 @@ impl<'a> TypeChecker<'a> {
         if name.lexeme.as_str() == "print" {
             return Ok(TypeInfo::Callable(CallableTypeInfo::Function(
                 FunctionTypeInfo {
+                    name: "print".to_string(),
                     params: vec![FnParamTypeInfo {
                         name: "msg".to_string(),
                         type_info: Box::new(TypeInfo::PlainString),
                     }],
                     ret: None,
+                    known_fn_mod: Some(ast::FnMod::Norm),
                 },
             )));
         }
@@ -176,14 +205,26 @@ impl<'a> ast::DeclVisitor<TypeResult<()>> for TypeChecker<'a> {
             self.main_fn = Some(decl.clone());
         }
 
-        let function = TypeInfo::Callable(CallableTypeInfo::Function(FunctionTypeInfo {
+        let known_fn_mod = decl.fn_mod.clone();
+        self.known_fn_mod = known_fn_mod.clone();
+
+        let function = FunctionTypeInfo {
+            name: name.clone(),
             params: vec![],
             ret: None,
-        }));
+            known_fn_mod,
+        };
 
-        self.environment.define(name, function);
+        self.environment.define(
+            name.clone(),
+            TypeInfo::Callable(CallableTypeInfo::Function(function.clone())),
+        );
 
-        return self.execute_body(&decl.body, self.environment.share().shared_enclosed());
+        self.fns_to_eval.push((function, decl.clone()));
+
+        self.known_fn_mod = None;
+
+        return Ok(());
     }
 }
 
@@ -273,6 +314,52 @@ impl<'a> ast::ExprVisitor<TypeResult> for TypeChecker<'a> {
             });
         }
 
+        // TODO: Allow pure fns to call safe fns only with owned data
+        // TODO: safe fn calls unknown fn calls norm function doesn't get picked up.
+        // need to propogate checks through until no unknown fns exist
+
+        match (&self.known_fn_mod, &callable) {
+            (
+                Some(ast::FnMod::Norm),
+                CallableTypeInfo::Function(FunctionTypeInfo {
+                    known_fn_mod: Some(ast::FnMod::Risk),
+                    ..
+                }),
+            ) => {
+                self.error_ctx.type_error(TypeError::TypeMismatch {
+                    details: Some(format!("Norm fns can only call pure, safe, and norm fns")),
+                });
+            }
+
+            (
+                Some(ast::FnMod::Safe),
+                CallableTypeInfo::Function(FunctionTypeInfo {
+                    known_fn_mod: Some(ast::FnMod::Risk | ast::FnMod::Norm),
+                    ..
+                }),
+            ) => {
+                self.error_ctx.type_error(TypeError::TypeMismatch {
+                    details: Some(format!("Safe fns can only call pure and safe fns")),
+                });
+            }
+
+            (
+                None,
+                CallableTypeInfo::Function(FunctionTypeInfo {
+                    known_fn_mod: Some(ast::FnMod::Risk),
+                    ..
+                }),
+            ) => {
+                self.error_ctx.type_error(TypeError::TypeMismatch {
+                    details: Some(format!(
+                        "Fns must be marked as risk in order to call risk fns"
+                    )),
+                });
+            }
+
+            _ => {}
+        };
+
         let ret = match callable {
             CallableTypeInfo::Function(FunctionTypeInfo { ret: Some(ret), .. }) => *ret,
             CallableTypeInfo::Function(FunctionTypeInfo { ret: None, .. }) => TypeInfo::Nil,
@@ -282,7 +369,13 @@ impl<'a> ast::ExprVisitor<TypeResult> for TypeChecker<'a> {
     }
 
     fn visit_crash_expr(&mut self, _: &ast::CrashExpr) -> TypeResult {
-        return Ok(TypeInfo::Nil);
+        if let Some(ast::FnMod::Risk) = self.known_fn_mod {
+            return Ok(TypeInfo::Nil);
+        } else {
+            return Err(TypeError::TypeMismatch {
+                details: Some(format!("Function must be marked as a risk")),
+            });
+        }
     }
 
     fn visit_get_expr(&mut self, expr: &ast::GetExpr) -> TypeResult {
