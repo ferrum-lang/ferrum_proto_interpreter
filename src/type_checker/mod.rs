@@ -14,7 +14,7 @@ use thiserror::Error;
 
 pub type TypeResult<T = TypeInfo, E = TypeError> = Result<T, E>;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub struct TypeChecker<'a> {
     tree: &'a ast::AST,
     locals: &'a HashMap<ast::Id, resolver::Distance>,
@@ -24,6 +24,7 @@ pub struct TypeChecker<'a> {
     main_fn: Option<ast::FunctionDecl>,
     known_fn_mod: Option<ast::FnMod>,
     fns_to_eval: Vec<(FunctionTypeInfo, ast::FunctionDecl)>,
+    fn_map: HashMap<ast::Id, (FunctionTypeInfo, ast::FunctionDecl)>,
 }
 
 impl<'a> TypeChecker<'a> {
@@ -40,6 +41,7 @@ impl<'a> TypeChecker<'a> {
             main_fn: None,
             known_fn_mod: None,
             fns_to_eval: vec![],
+            fn_map: HashMap::new(),
         };
     }
 
@@ -54,27 +56,37 @@ impl<'a> TypeChecker<'a> {
             }
         }
 
-        for (mut function, decl) in self.fns_to_eval.clone() {
-            self.known_fn_mod = decl.fn_mod.clone();
+        while !self.fns_to_eval.is_empty() {
+            for (mut function, decl) in std::mem::take(&mut self.fns_to_eval) {
+                self.known_fn_mod = function
+                    .known_fn_mod
+                    .as_ref()
+                    .or_else(|| decl.fn_mod.as_ref())
+                    .cloned()
+                    .clone();
 
-            match self.execute_body(&decl.body, self.environment.share().shared_enclosed()) {
-                Err(e) => {
-                    self.error_ctx.type_error(e);
-                    break;
+                match self.execute_body(&decl.body, self.environment.share().shared_enclosed()) {
+                    Err(e) => {
+                        self.error_ctx.type_error(e);
+                        break;
+                    }
+                    _ => {}
                 }
-                _ => {}
-            }
 
-            if function.known_fn_mod.is_none() {
-                function.known_fn_mod = self.known_fn_mod.take();
-            } else {
-                self.known_fn_mod = None;
-            }
+                if function.known_fn_mod.is_none() {
+                    function.known_fn_mod = self.known_fn_mod.take();
+                } else {
+                    self.known_fn_mod = None;
+                }
 
-            self.environment.define(
-                function.name.clone(),
-                TypeInfo::Callable(CallableTypeInfo::Function(function)),
-            );
+                self.fn_map
+                    .insert(function.decl_id, (function.clone(), decl.clone()));
+
+                self.environment.define(
+                    function.name.clone(),
+                    TypeInfo::Callable(CallableTypeInfo::Function(function)),
+                );
+            }
         }
 
         if let Some(main_fn) = self.main_fn {
@@ -155,6 +167,7 @@ impl<'a> TypeChecker<'a> {
         if name.lexeme.as_str() == "print" {
             return Ok(TypeInfo::Callable(CallableTypeInfo::Function(
                 FunctionTypeInfo {
+                    decl_id: ast::Id::MAX,
                     name: "print".to_string(),
                     params: vec![FnParamTypeInfo {
                         name: "msg".to_string(),
@@ -209,6 +222,7 @@ impl<'a> ast::DeclVisitor<TypeResult<()>> for TypeChecker<'a> {
         self.known_fn_mod = known_fn_mod.clone();
 
         let function = FunctionTypeInfo {
+            decl_id: decl.id,
             name: name.clone(),
             params: vec![],
             ret: None,
@@ -220,6 +234,8 @@ impl<'a> ast::DeclVisitor<TypeResult<()>> for TypeChecker<'a> {
             TypeInfo::Callable(CallableTypeInfo::Function(function.clone())),
         );
 
+        self.fn_map
+            .insert(function.decl_id, (function.clone(), decl.clone()));
         self.fns_to_eval.push((function, decl.clone()));
 
         self.known_fn_mod = None;
@@ -303,6 +319,18 @@ impl<'a> ast::ExprVisitor<TypeResult> for TypeChecker<'a> {
                 details: Some("Can only call functions and structs".to_string()),
             });
         };
+        let callable = match callable {
+            CallableTypeInfo::Function(function) => {
+                let function = self
+                    .fn_map
+                    .get(&function.decl_id)
+                    .map(|(callable, _)| callable)
+                    .cloned()
+                    .unwrap_or(function);
+
+                CallableTypeInfo::Function(function)
+            }
+        };
 
         dbg!("TODO: compare call expr arg types");
 
@@ -318,6 +346,63 @@ impl<'a> ast::ExprVisitor<TypeResult> for TypeChecker<'a> {
         // TODO: safe fn calls unknown fn calls norm function doesn't get picked up.
         // need to propogate checks through until no unknown fns exist
 
+        // dbg!(&self.known_fn_mod, &callable);
+        match (&self.known_fn_mod, &callable) {
+            (
+                None,
+                CallableTypeInfo::Function(FunctionTypeInfo {
+                    known_fn_mod: Some(ast::FnMod::Pure),
+                    ..
+                }),
+            ) => {
+                self.known_fn_mod = Some(ast::FnMod::AtLeastPure);
+            }
+            (
+                None,
+                CallableTypeInfo::Function(FunctionTypeInfo {
+                    known_fn_mod: Some(ast::FnMod::Safe),
+                    ..
+                }),
+            ) => {
+                self.known_fn_mod = Some(ast::FnMod::AtLeastSafe);
+            }
+            (
+                None,
+                CallableTypeInfo::Function(FunctionTypeInfo {
+                    known_fn_mod: Some(ast::FnMod::Norm),
+                    ..
+                }),
+            ) => {
+                self.known_fn_mod = Some(ast::FnMod::Norm);
+            }
+
+            _ => {}
+        }
+
+        match (&self.known_fn_mod, &callable) {
+            (
+                Some(ast::FnMod::AtLeastPure),
+                CallableTypeInfo::Function(FunctionTypeInfo {
+                    known_fn_mod: Some(ast::FnMod::Safe),
+                    ..
+                }),
+            ) => {
+                self.known_fn_mod = Some(ast::FnMod::AtLeastSafe);
+            }
+
+            (
+                Some(ast::FnMod::AtLeastPure | ast::FnMod::AtLeastSafe),
+                CallableTypeInfo::Function(FunctionTypeInfo {
+                    known_fn_mod: Some(ast::FnMod::Norm),
+                    ..
+                }),
+            ) => {
+                self.known_fn_mod = Some(ast::FnMod::Norm);
+            }
+
+            _ => {}
+        }
+
         match (&self.known_fn_mod, &callable) {
             (
                 Some(ast::FnMod::Norm),
@@ -332,7 +417,7 @@ impl<'a> ast::ExprVisitor<TypeResult> for TypeChecker<'a> {
             }
 
             (
-                Some(ast::FnMod::Safe),
+                Some(ast::FnMod::Safe | ast::FnMod::AtLeastSafe),
                 CallableTypeInfo::Function(FunctionTypeInfo {
                     known_fn_mod: Some(ast::FnMod::Risk | ast::FnMod::Norm),
                     ..
@@ -355,6 +440,26 @@ impl<'a> ast::ExprVisitor<TypeResult> for TypeChecker<'a> {
                         "Fns must be marked as risk in order to call risk fns"
                     )),
                 });
+            }
+            (
+                _,
+                CallableTypeInfo::Function(
+                    function @ FunctionTypeInfo {
+                        decl_id,
+                        known_fn_mod: None,
+                        ..
+                    },
+                ),
+            ) => {
+                if let Some((_, decl)) = self.fn_map.get(decl_id) {
+                    // dbg!(&function, &decl);
+
+                    let mut function = function.clone();
+                    function.known_fn_mod = self.known_fn_mod.clone();
+                    // dbg!(&function);
+
+                    self.fns_to_eval.push((function.clone(), decl.clone()));
+                }
             }
 
             _ => {}

@@ -64,8 +64,10 @@ pub struct FunctionDecl {
 pub enum FnMod {
     Norm,
     Pure,
+    AtLeastPure,
     Risk,
     Safe,
+    AtLeastSafe,
 }
 
 #[derive(Debug, Clone, PartialEq)]

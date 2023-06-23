@@ -12,16 +12,23 @@ pub fn main()
 
 	// print("Hello {age} year old named {name}!")
 	
-	say_hi()
+	test_safe()
 ;
 
-fn say_hi()
-	print("Hi")
-
-	test()
+safe fn test_safe()
+	test_unknown()
 ;
 
-fn test()
-	print("test")
+fn test_unknown()
+	test_unknown2()
 ;
+
+fn test_unknown2()
+	test_unknown3()
+;
+
+fn test_unknown3()
+	print("unknown norm 3")
+;
+
 

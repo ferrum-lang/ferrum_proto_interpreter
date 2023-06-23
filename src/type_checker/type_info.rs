@@ -27,6 +27,7 @@ impl CallableTypeInfo {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct FunctionTypeInfo {
+    pub decl_id: ast::Id,
     pub name: String,
     pub params: Vec<FnParamTypeInfo>,
     pub ret: Option<Box<TypeInfo>>,
