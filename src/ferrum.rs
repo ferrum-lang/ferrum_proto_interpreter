@@ -10,7 +10,7 @@ use std::fs;
 use std::path;
 
 pub fn run(config: &Config) -> Result {
-    dbg!(&config);
+    // dbg!(&config);
 
     let entry_file = config
         .entry_file
@@ -24,14 +24,14 @@ pub fn run(config: &Config) -> Result {
     // dbg!(&tokens);
 
     let (ast, parse_err_ctx) = parser::Parser::from_tokens(tokens).parse_ast();
-    dbg!(&ast);
+    // dbg!(&ast);
 
     let (locals, resolve_err_ctx) = resolver::Resolver::from_ast(&ast).resolve_locals();
-    dbg!(&locals);
+    // dbg!(&locals);
 
     let (types, type_check_err_ctx) =
         type_checker::TypeChecker::from_context(&ast, &locals).resolve_types();
-    dbg!(&types);
+    // dbg!(&types);
 
     let error_ctx = ErrorContext::merge(vec![
         scan_err_ctx,

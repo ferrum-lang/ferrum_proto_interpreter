@@ -1,22 +1,35 @@
 use fe::print
 
 pub fn main()
-	// const name
-	// mut age = "26"
+	const name
+	mut age = "26"
 
-	// name = "Adam"
+	name = "Adam"
 	
-	// print("Hello {age} year old named {name}!")
+	print("Hello {age} year old named {name}!")
 
-	// age = "27"
+	age = "27"
 
-	// print("Hello {age} year old named {name}!")
-	
+	print("Hello {age} year old named {name}!")
+
+	test_pure()
+	test_safe()
+	test_unknown()
+
+	print("all good")
+;
+
+pure fn test_pure()
+	// this is ok because no external data gets mutated
 	test_safe()
 ;
 
 safe fn test_safe()
-	test_unknown()
+	// `test_unknown3` calls `print` which is `norm`
+	// thus all the calls up that stack require at least `norm`
+	// since `test_safe` is `safe`, the below call will fail to compile
+
+	// test_unknown()
 ;
 
 fn test_unknown()

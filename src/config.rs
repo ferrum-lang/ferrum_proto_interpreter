@@ -10,7 +10,7 @@ pub struct Config {
 pub fn parse_config() -> Result<Config> {
     let mut cli_args: Vec<String> = env::args().collect();
 
-    println!("{cli_args:#?}");
+    // println!("{cli_args:#?}");
 
     let entry_file = if cli_args.len() == 1 {
         None

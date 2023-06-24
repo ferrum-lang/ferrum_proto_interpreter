@@ -168,6 +168,7 @@ impl<'a> TypeChecker<'a> {
             return Ok(TypeInfo::Callable(CallableTypeInfo::Function(
                 FunctionTypeInfo {
                     decl_id: ast::Id::MAX,
+                    method_on_type: None,
                     name: "print".to_string(),
                     params: vec![FnParamTypeInfo {
                         name: "msg".to_string(),
@@ -223,6 +224,7 @@ impl<'a> ast::DeclVisitor<TypeResult<()>> for TypeChecker<'a> {
 
         let function = FunctionTypeInfo {
             decl_id: decl.id,
+            method_on_type: None,
             name: name.clone(),
             params: vec![],
             ret: None,
@@ -332,7 +334,7 @@ impl<'a> ast::ExprVisitor<TypeResult> for TypeChecker<'a> {
             }
         };
 
-        dbg!("TODO: compare call expr arg types");
+        // dbg!("TODO: compare call expr arg types");
 
         if arguments.len() != callable.arity() {
             return Err(TypeError::WrongNumberOfArgs {
@@ -343,8 +345,6 @@ impl<'a> ast::ExprVisitor<TypeResult> for TypeChecker<'a> {
         }
 
         // TODO: Allow pure fns to call safe fns only with owned data
-        // TODO: safe fn calls unknown fn calls norm function doesn't get picked up.
-        // need to propogate checks through until no unknown fns exist
 
         // dbg!(&self.known_fn_mod, &callable);
         match (&self.known_fn_mod, &callable) {
@@ -414,6 +414,36 @@ impl<'a> ast::ExprVisitor<TypeResult> for TypeChecker<'a> {
                 self.error_ctx.type_error(TypeError::TypeMismatch {
                     details: Some(format!("Norm fns can only call pure, safe, and norm fns")),
                 });
+            }
+
+            (
+                Some(ast::FnMod::Pure),
+                CallableTypeInfo::Function(FunctionTypeInfo {
+                    known_fn_mod: Some(ast::FnMod::Risk | ast::FnMod::Norm),
+                    ..
+                }),
+            ) => {
+                self.error_ctx.type_error(TypeError::TypeMismatch {
+                    details: Some(format!(
+                        "Pure fns can only call pure fns (and safe fns with only owned data)"
+                    )),
+                });
+            }
+
+            (
+                Some(ast::FnMod::Pure),
+                CallableTypeInfo::Function(FunctionTypeInfo {
+                    known_fn_mod: Some(ast::FnMod::Safe),
+                    method_on_type,
+                    params,
+                    ..
+                }),
+            ) => {
+                // dbg!(&method_on_type, &params);
+
+                // TODO: Check for mutable refs that is not owned
+                // if let Some(TypeInfo::Callable()) = method_on_type {}
+                // for param in params {}
             }
 
             (
