@@ -10,6 +10,7 @@ pub enum TypeInfo {
     PlainString,
     Number,
     Callable(CallableTypeInfo),
+    Ref(RefType),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -39,4 +40,10 @@ pub struct FunctionTypeInfo {
 pub struct FnParamTypeInfo {
     pub name: String,
     pub type_info: Box<TypeInfo>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct RefType {
+    pub is_mut: bool,
+    pub of: Box<TypeInfo>,
 }

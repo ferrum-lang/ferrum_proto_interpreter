@@ -201,7 +201,7 @@ impl Parser {
                     "Expect ':' after struct field name",
                 )?;
 
-                let type_ref = self.static_path()?;
+                let type_ref = self.type_ref()?;
 
                 fields.push(ast::StructField { name, type_ref });
 
@@ -274,7 +274,7 @@ impl Parser {
             let mut try_parse_field = |params: &mut Vec<ast::FnParam>| {
                 let name = self.consume(&token::TokenType::Identifier, "Expect parameter name")?;
                 self.consume(&token::TokenType::Colon, "Expect ':' after param name")?;
-                let type_ref = self.static_path()?;
+                let type_ref = self.type_ref()?;
 
                 params.push(ast::FnParam { name, type_ref });
 
@@ -297,7 +297,7 @@ impl Parser {
         self.consume(&token::TokenType::RightParen, "Expect ')' after parameters")?;
 
         let return_type = if self.match_any(&[token::TokenType::Colon], WithNewlines::One) {
-            Some(self.static_path()?)
+            Some(self.type_ref()?)
         } else {
             None
         };
@@ -447,6 +447,10 @@ impl Parser {
     }
 
     fn return_statement(&mut self) -> Result<ast::ReturnStmt> {
+        let Some(keyword) = self.previous().cloned() else {
+            return Err(ParserError { message: format!("Unexpected error getting return keyword token") });
+        };
+
         let value = if let Some(peek) = self.peek() {
             if peek.token_type != token::TokenType::Newline {
                 Some(self.expression()?)
@@ -459,6 +463,7 @@ impl Parser {
 
         return Ok(ast::ReturnStmt {
             id: self.ast_id(),
+            keyword,
             value,
         });
     }
@@ -999,6 +1004,26 @@ impl Parser {
                 "TODO: Handle more complicated assignment patterns",
             )?,
         }));
+    }
+
+    fn type_ref(&mut self) -> Result<ast::TypeRef> {
+        let is_ref = self.match_any(&[token::TokenType::Amp], WithNewlines::None);
+        let ref_type = if is_ref {
+            if self.match_any(&[token::TokenType::Mut], WithNewlines::None) {
+                Some(ast::RefType::Mut)
+            } else {
+                Some(ast::RefType::Shared)
+            }
+        } else {
+            None
+        };
+
+        let type_ref = ast::TypeRef {
+            ref_type,
+            static_path: self.static_path()?,
+        };
+
+        return Ok(type_ref);
     }
 
     fn static_path(&mut self) -> Result<ast::StaticPath> {

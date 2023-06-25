@@ -21,7 +21,19 @@ pub struct AST {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub struct TypeRef {
+    pub ref_type: Option<RefType>,
+    pub static_path: StaticPath,
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub struct StaticPath {
     pub root: Option<Box<StaticPath>>,
     pub name: token::Token,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum RefType {
+    Shared,
+    Mut,
 }

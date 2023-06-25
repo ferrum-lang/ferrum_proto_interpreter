@@ -94,13 +94,12 @@ impl<'a> Resolver<'a> {
 
     fn declare(&mut self, name: &token::Token) {
         if let Some(scope) = self.scopes.last_mut() {
-            // TODO: Handle variable shadowing
-            if scope.contains_key(&name.lexeme) {
-                self.error_ctx.token_error(
-                    name.clone(),
-                    "Already a variable with this name in this scope",
-                );
-            }
+            // if scope.contains_key(&name.lexeme) {
+            //     self.error_ctx.token_error(
+            //         name.clone(),
+            //         "Already a variable with this name in this scope",
+            //     );
+            // }
 
             scope.insert(name.lexeme.clone(), false);
         }
@@ -257,7 +256,14 @@ impl ast::StmtVisitor for Resolver<'_> {
     }
 
     fn visit_return_stmt(&mut self, stmt: &ast::ReturnStmt) -> () {
-        unimplemented!()
+        if self.current_function == FunctionType::None {
+            self.error_ctx
+                .token_error(stmt.keyword.clone(), "Can't return from top-level code");
+        }
+
+        if let Some(value) = &stmt.value {
+            self.resolve_expr(value);
+        }
     }
 }
 

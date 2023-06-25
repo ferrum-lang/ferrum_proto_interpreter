@@ -46,7 +46,7 @@ pub struct StructDecl {
 #[derive(Debug, Clone, PartialEq)]
 pub struct StructField {
     pub name: token::Token,
-    pub type_ref: ast::StaticPath,
+    pub type_ref: ast::TypeRef,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -56,7 +56,7 @@ pub struct FunctionDecl {
     pub fn_mod: Option<FnMod>,
     pub name: token::Token,
     pub params: Vec<FnParam>,
-    pub return_type: Option<ast::StaticPath>,
+    pub return_type: Option<ast::TypeRef>,
     pub body: Vec<Stmt>,
 }
 
@@ -73,7 +73,7 @@ pub enum FnMod {
 #[derive(Debug, Clone, PartialEq)]
 pub struct FnParam {
     pub name: token::Token,
-    pub type_ref: ast::StaticPath,
+    pub type_ref: ast::TypeRef,
 }
 
 // Visitor pattern

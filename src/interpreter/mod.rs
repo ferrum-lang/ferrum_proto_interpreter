@@ -181,16 +181,19 @@ impl DeclVisitor<rt::RuntimeResult<()>> for Interpreter {
                                         column: 0,
                                     }),
                                 },
-                                type_ref: ast::StaticPath {
-                                    root: None,
-                                    name: token::Token {
-                                        lexeme: "String".to_string(),
-                                        token_type: token::TokenType::Identifier,
-                                        span: Span::from_position(Position {
-                                            index: std::usize::MAX,
-                                            line: 0,
-                                            column: 0,
-                                        }),
+                                type_ref: ast::TypeRef {
+                                    ref_type: None,
+                                    static_path: ast::StaticPath {
+                                        root: None,
+                                        name: token::Token {
+                                            lexeme: "String".to_string(),
+                                            token_type: token::TokenType::Identifier,
+                                            span: Span::from_position(Position {
+                                                index: std::usize::MAX,
+                                                line: 0,
+                                                column: 0,
+                                            }),
+                                        },
                                     },
                                 },
                             }],

@@ -147,8 +147,34 @@ impl<'a> TypeChecker<'a> {
         return res;
     }
 
-    fn static_path_type(&mut self, static_path: &ast::StaticPath) -> TypeInfo {
-        todo!()
+    fn type_ref(&mut self, type_ref: &ast::TypeRef) -> TypeResult {
+        match &type_ref.ref_type {
+            Some(ast::RefType::Shared) => {
+                return Ok(TypeInfo::Ref(RefType {
+                    is_mut: false,
+                    of: Box::new(self.static_path(&type_ref.static_path)?),
+                }))
+            }
+
+            Some(ast::RefType::Mut) => {
+                return Ok(TypeInfo::Ref(RefType {
+                    is_mut: true,
+                    of: Box::new(self.static_path(&type_ref.static_path)?),
+                }))
+            }
+
+            None => return self.static_path(&type_ref.static_path),
+        }
+    }
+
+    fn static_path(&mut self, static_path: &ast::StaticPath) -> TypeResult {
+        match static_path {
+            ast::StaticPath { root: None, name } if name.lexeme.as_str() == "String" => {
+                return Ok(TypeInfo::PlainString);
+            }
+
+            _ => todo!("Type-check: {static_path:?}"),
+        }
     }
 
     fn is_compatible(&self, val: &TypeInfo, dest: &TypeInfo) -> bool {
@@ -222,12 +248,18 @@ impl<'a> ast::DeclVisitor<TypeResult<()>> for TypeChecker<'a> {
         let known_fn_mod = decl.fn_mod.clone();
         self.known_fn_mod = known_fn_mod.clone();
 
+        let ret = if let Some(type_ref) = &decl.return_type {
+            Some(Box::new(self.type_ref(type_ref)?))
+        } else {
+            None
+        };
+
         let function = FunctionTypeInfo {
             decl_id: decl.id,
             method_on_type: None,
             name: name.clone(),
             params: vec![],
-            ret: None,
+            ret,
             known_fn_mod,
         };
 
@@ -298,7 +330,13 @@ impl<'a> ast::StmtVisitor<TypeResult<()>> for TypeChecker<'a> {
     }
 
     fn visit_return_stmt(&mut self, stmt: &ast::ReturnStmt) -> TypeResult<()> {
-        unimplemented!()
+        // TODO: Ensure return type matches returned type
+
+        if let Some(value) = &stmt.value {
+            self.evaluate(value)?;
+        }
+
+        return Ok(());
     }
 }
 
@@ -531,8 +569,10 @@ impl<'a> ast::ExprVisitor<TypeResult> for TypeChecker<'a> {
 
     fn visit_format_string_expr(&mut self, expr: &ast::FormatStringExpr) -> TypeResult {
         for part in &expr.parts {
-            let TypeInfo::PlainString = self.evaluate(&part.expr)? else {
-                return Err(TypeError::TypeMismatch { details: Some(format!("Expected part to be a string: {part:?}")) });
+            let string = self.evaluate(&part.expr)?;
+
+            let TypeInfo::PlainString = string else {
+                return Err(TypeError::TypeMismatch { details: Some(format!("Expected part to be a string: {part:?}, string={string:?}")) });
             };
         }
 

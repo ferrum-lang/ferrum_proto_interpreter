@@ -16,6 +16,10 @@ pub fn main()
 	test_safe()
 	test_unknown()
 
+	const name = get_name()
+	print("Name fetched: {name}")
+	// say_hi_to(name)
+
 	print("all good")
 ;
 
@@ -43,5 +47,13 @@ fn test_unknown2()
 fn test_unknown3()
 	print("unknown norm 3")
 ;
+
+pure fn get_name(): String
+	return "Adam"
+;
+
+// norm fn say_hi_to(name: &String)
+// 	print("Hi {name}")
+// ;
 
 

@@ -93,6 +93,7 @@ pub enum AssignOp {
 #[derive(Debug, Clone, PartialEq)]
 pub struct ReturnStmt {
     pub id: Id,
+    pub keyword: token::Token,
     pub value: Option<ast::Expr>,
 }
 
