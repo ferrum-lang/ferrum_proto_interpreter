@@ -65,7 +65,12 @@ impl<'a> TypeChecker<'a> {
                     .cloned()
                     .clone();
 
-                match self.execute_body(&decl.body, self.environment.share().shared_enclosed()) {
+                let fn_env = self.environment.share().shared_enclosed();
+                for param in &function.params {
+                    fn_env.define(param.name.clone(), *param.type_info.clone());
+                }
+
+                match self.execute_body(&decl.body, fn_env) {
                     Err(e) => {
                         self.error_ctx.type_error(e);
                         break;
@@ -248,6 +253,19 @@ impl<'a> ast::DeclVisitor<TypeResult<()>> for TypeChecker<'a> {
         let known_fn_mod = decl.fn_mod.clone();
         self.known_fn_mod = known_fn_mod.clone();
 
+        let mut params = vec![];
+
+        for param in &decl.params {
+            let type_info = Box::new(self.type_ref(&param.type_ref)?);
+
+            let param_type = FnParamTypeInfo {
+                name: param.name.lexeme.clone(),
+                type_info,
+            };
+
+            params.push(param_type);
+        }
+
         let ret = if let Some(type_ref) = &decl.return_type {
             Some(Box::new(self.type_ref(type_ref)?))
         } else {
@@ -258,7 +276,7 @@ impl<'a> ast::DeclVisitor<TypeResult<()>> for TypeChecker<'a> {
             decl_id: decl.id,
             method_on_type: None,
             name: name.clone(),
-            params: vec![],
+            params,
             ret,
             known_fn_mod,
         };
@@ -568,11 +586,31 @@ impl<'a> ast::ExprVisitor<TypeResult> for TypeChecker<'a> {
     }
 
     fn visit_format_string_expr(&mut self, expr: &ast::FormatStringExpr) -> TypeResult {
+        fn can_use_in_fmt_str(typ: &TypeInfo) -> bool {
+            if let TypeInfo::PlainString = typ {
+                return true;
+            }
+
+            if let TypeInfo::Number = typ {
+                return true;
+            }
+
+            if let TypeInfo::Ref(ref_type) = typ {
+                return can_use_in_fmt_str(&ref_type.of);
+            }
+
+            return false;
+        }
+
         for part in &expr.parts {
             let string = self.evaluate(&part.expr)?;
 
-            let TypeInfo::PlainString = string else {
-                return Err(TypeError::TypeMismatch { details: Some(format!("Expected part to be a string: {part:?}, string={string:?}")) });
+            if !can_use_in_fmt_str(&string) {
+                return Err(TypeError::TypeMismatch {
+                    details: Some(format!(
+                        "Expected part to be a string: {part:?}, string={string:?}"
+                    )),
+                });
             };
         }
 

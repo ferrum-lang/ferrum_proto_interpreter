@@ -18,7 +18,7 @@ pub fn main()
 
 	const name = get_name()
 	print("Name fetched: {name}")
-	// say_hi_to(name)
+	say_hi_to(name)
 
 	print("all good")
 ;
@@ -52,8 +52,8 @@ pure fn get_name(): String
 	return "Adam"
 ;
 
-// norm fn say_hi_to(name: &String)
-// 	print("Hi {name}")
-// ;
+norm fn say_hi_to(name: &String)
+	print("Hi {name}")
+;
 
 
