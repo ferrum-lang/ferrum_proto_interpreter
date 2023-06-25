@@ -229,6 +229,42 @@ impl<'a> TypeChecker<'a> {
 
         return Ok(());
     }
+
+    fn is_stringy(&self, typ: &TypeInfo) -> bool {
+        if let TypeInfo::PlainString = typ {
+            return true;
+        }
+
+        if let TypeInfo::Ref(ref_type) = typ {
+            return self.is_stringy(&ref_type.of);
+        }
+
+        return false;
+    }
+
+    fn is_numbery(&self, typ: &TypeInfo) -> bool {
+        if let TypeInfo::Number = typ {
+            return true;
+        }
+
+        if let TypeInfo::Ref(ref_type) = typ {
+            return self.is_numbery(&ref_type.of);
+        }
+
+        return false;
+    }
+
+    fn can_stringify(&self, typ: &TypeInfo) -> bool {
+        if self.is_stringy(typ) {
+            return true;
+        }
+
+        if self.is_numbery(typ) {
+            return true;
+        }
+
+        return false;
+    }
 }
 
 impl<'a> ast::DeclVisitor<TypeResult<()>> for TypeChecker<'a> {
@@ -586,26 +622,10 @@ impl<'a> ast::ExprVisitor<TypeResult> for TypeChecker<'a> {
     }
 
     fn visit_format_string_expr(&mut self, expr: &ast::FormatStringExpr) -> TypeResult {
-        fn can_use_in_fmt_str(typ: &TypeInfo) -> bool {
-            if let TypeInfo::PlainString = typ {
-                return true;
-            }
-
-            if let TypeInfo::Number = typ {
-                return true;
-            }
-
-            if let TypeInfo::Ref(ref_type) = typ {
-                return can_use_in_fmt_str(&ref_type.of);
-            }
-
-            return false;
-        }
-
         for part in &expr.parts {
             let string = self.evaluate(&part.expr)?;
 
-            if !can_use_in_fmt_str(&string) {
+            if !self.can_stringify(&string) {
                 return Err(TypeError::TypeMismatch {
                     details: Some(format!(
                         "Expected part to be a string: {part:?}, string={string:?}"
@@ -630,7 +650,44 @@ impl<'a> ast::ExprVisitor<TypeResult> for TypeChecker<'a> {
     }
 
     fn visit_binary_expr(&mut self, expr: &ast::BinaryExpr) -> TypeResult {
-        unimplemented!()
+        let left = self.evaluate(&expr.left)?;
+        let right = self.evaluate(&expr.right)?;
+
+        match &expr.op.0 {
+            ast::BinaryOp::Plus => match (left, right) {
+                (left, right) if self.is_stringy(&left) => {
+                    if self.can_stringify(&right) {
+                        return Ok(TypeInfo::PlainString);
+                    } else {
+                        let err = TypeError::TypeMismatch {
+                            details: Some(format!("Cannot stringify: {right:?}")),
+                        };
+                        self.error_ctx.type_error(err.clone());
+                        return Err(err);
+                    }
+                }
+                (left, right) if self.is_numbery(&left) => {
+                    if self.is_numbery(&right) {
+                        return Ok(TypeInfo::Number);
+                    } else {
+                        let err = TypeError::TypeMismatch {
+                            details: Some(format!("Cannot add to a number: {right:?}")),
+                        };
+                        self.error_ctx.type_error(err.clone());
+                        return Err(err);
+                    }
+                }
+                (left, right) => {
+                    let err = TypeError::TypeMismatch {
+                        details: Some(format!("Cannot add: {left:?} + {right:?}")),
+                    };
+                    self.error_ctx.type_error(err.clone());
+                    return Err(err);
+                }
+            },
+
+            op => todo!("TODO: Handle {op:?}"),
+        }
     }
 }
 

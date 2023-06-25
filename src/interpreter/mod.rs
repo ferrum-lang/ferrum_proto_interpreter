@@ -410,6 +410,76 @@ impl ExprVisitor<rt::RuntimeResult> for Interpreter {
     }
 
     fn visit_binary_expr(&mut self, expr: &ast::BinaryExpr) -> rt::RuntimeResult {
-        todo!()
+        let left = self.evaluate(&expr.left)?;
+        let right = self.evaluate(&expr.right)?;
+
+        match &expr.op.0 {
+            ast::BinaryOp::Plus => match (left, right) {
+                (rt::RuntimeValue::Number(left), rt::RuntimeValue::Number(right)) => {
+                    return Ok(rt::RuntimeValue::Number(left + right));
+                }
+                (rt::RuntimeValue::String(left), rt::RuntimeValue::String(right)) => {
+                    let mut res = left.to_string();
+                    res.push_str(&right);
+                    return Ok(rt::RuntimeValue::String(res.into()));
+                }
+                (_left, _right) => {
+                    return Err(rt::RuntimeError::InvalidBinaryExpr {
+                        expr: expr.clone(),
+                        details: Some(format!(
+                            "[{}:{}] Can only add 2 strings or 2 numbers.",
+                            file!(),
+                            line!()
+                        )),
+                    });
+                }
+            },
+
+            // ast::BinaryOp::EqualEqual => {
+            //     Ok(rt::RuntimeValue::Boolean(self.is_equal(&left, &right)))
+            // }
+            // ast::BinaryOp::NotEqual => Ok(rt::RuntimeValue::Boolean(!self.is_equal(&left, &right))),
+            op => {
+                let rt::RuntimeValue::Number(left) = left else {
+                    return Err(rt::RuntimeError::InvalidBinaryExpr {
+                        expr: expr.clone(),
+                        details: Some(format!(
+                            "[{}:{}] Expected left operand to be a number.",
+                            file!(),
+                            line!()
+                        )),
+                    });
+                };
+
+                let rt::RuntimeValue::Number(right) = right else {
+                    return Err(rt::RuntimeError::InvalidBinaryExpr {
+                        expr: expr.clone(),
+                        details: Some(format!(
+                            "[{}:{}] Expected right operand to be a number.",
+                            file!(),
+                            line!()
+                        )),
+                    });
+                };
+
+                return Ok(match op {
+                    ast::BinaryOp::Plus | ast::BinaryOp::EqualEqual | ast::BinaryOp::NotEqual => {
+                        unreachable!()
+                    }
+
+                    ast::BinaryOp::Greater => rt::RuntimeValue::Boolean(left > right),
+                    ast::BinaryOp::GreaterEqual => rt::RuntimeValue::Boolean(left >= right),
+                    ast::BinaryOp::Less => rt::RuntimeValue::Boolean(left < right),
+                    ast::BinaryOp::LessEqual => rt::RuntimeValue::Boolean(left <= right),
+
+                    ast::BinaryOp::Minus => rt::RuntimeValue::Number(left - right),
+                    ast::BinaryOp::Divide => rt::RuntimeValue::Number(left / right),
+                    ast::BinaryOp::Times => rt::RuntimeValue::Number(left * right),
+                    ast::BinaryOp::Modulo => rt::RuntimeValue::Number(left % right),
+
+                    op => todo!("Handle {op:?}"),
+                });
+            }
+        }
     }
 }

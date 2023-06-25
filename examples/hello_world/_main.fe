@@ -2,13 +2,13 @@ use fe::print
 
 pub fn main()
 	const name
-	mut age = "26"
+	mut age = 26
 
 	name = "Adam"
 	
 	print("Hello {age} year old named {name}!")
 
-	age = "27"
+	age = age + 1
 
 	print("Hello {age} year old named {name}!")
 
