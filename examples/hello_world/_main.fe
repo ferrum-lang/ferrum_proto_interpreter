@@ -18,7 +18,7 @@ pub fn main()
 
 	const name = get_name()
 	print("Name fetched: {name}")
-	say_hi_to(name)
+	say_hi_to(&name)
 
 	print("all good")
 ;

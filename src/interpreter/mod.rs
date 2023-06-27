@@ -406,7 +406,29 @@ impl ExprVisitor<rt::RuntimeResult> for Interpreter {
     }
 
     fn visit_unary_expr(&mut self, expr: &ast::UnaryExpr) -> rt::RuntimeResult {
-        todo!()
+        let right = self.evaluate(&expr.right)?;
+
+        match &expr.op.0 {
+            ast::UnaryOp::Not => Ok(rt::RuntimeValue::Boolean(
+                !self.is_truthy(&right).expect("TODO"),
+            )),
+
+            ast::UnaryOp::Minus => {
+                let rt::RuntimeValue::Number(value) = right else {
+                    return Err(rt::RuntimeError::InvalidUnaryExpr {
+                        expr: expr.clone(),
+                        details: Some(format!("[{}:{}] Can only apply minus unary operator to numbers.", file!(), line!())),
+                    });
+                };
+
+                return Ok(rt::RuntimeValue::Number(-value));
+            }
+
+            ast::UnaryOp::Ref(ref_type) => {
+                // TODO: Interpreter doesn't actually handle refs, just shares data
+                return Ok(right);
+            }
+        }
     }
 
     fn visit_binary_expr(&mut self, expr: &ast::BinaryExpr) -> rt::RuntimeResult {

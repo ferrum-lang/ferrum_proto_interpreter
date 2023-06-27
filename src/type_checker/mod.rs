@@ -436,7 +436,21 @@ impl<'a> ast::ExprVisitor<TypeResult> for TypeChecker<'a> {
             });
         }
 
-        // TODO: Allow pure fns to call safe fns only with owned data
+        match &callable {
+            CallableTypeInfo::Function(function) => {
+                for (idx, param) in function.params.iter().enumerate() {
+                    let arg = &arguments[idx];
+
+                    if !self.is_compatible(arg, &param.type_info) {
+                        return Err(TypeError::TypeMismatch {
+                            details: Some(format!(
+                                "Cannot pass {arg:?} as {param:?} in {callable:?}"
+                            )),
+                        });
+                    }
+                }
+            }
+        }
 
         // dbg!(&self.known_fn_mod, &callable);
         match (&self.known_fn_mod, &callable) {
@@ -646,7 +660,24 @@ impl<'a> ast::ExprVisitor<TypeResult> for TypeChecker<'a> {
     }
 
     fn visit_unary_expr(&mut self, expr: &ast::UnaryExpr) -> TypeResult {
-        unimplemented!()
+        let right = self.evaluate(&expr.right)?;
+
+        match &expr.op.0 {
+            ast::UnaryOp::Not => match right {
+                // TypeInfo::Boolean() => {}
+                typ => todo!("Handle ! on {typ:?}"),
+            },
+            ast::UnaryOp::Minus => match right {
+                TypeInfo::Number => return Ok(TypeInfo::Number),
+                typ => todo!("Handle - on {typ:?}"),
+            },
+            ast::UnaryOp::Ref(ref_type) => {
+                return Ok(TypeInfo::Ref(RefType {
+                    is_mut: *ref_type == ast::RefType::Mut,
+                    of: Box::new(right),
+                }))
+            }
+        }
     }
 
     fn visit_binary_expr(&mut self, expr: &ast::BinaryExpr) -> TypeResult {

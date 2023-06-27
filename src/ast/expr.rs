@@ -116,6 +116,7 @@ pub struct UnaryExpr {
 pub enum UnaryOp {
     Not,
     Minus,
+    Ref(RefType),
 }
 
 #[derive(Debug, Clone, PartialEq)]

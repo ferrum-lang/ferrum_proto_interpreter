@@ -763,7 +763,11 @@ impl Parser {
 
     fn unary(&mut self) -> Result<ast::Expr> {
         if self.match_any(
-            &[token::TokenType::Bang, token::TokenType::Minus],
+            &[
+                token::TokenType::Bang,
+                token::TokenType::Minus,
+                token::TokenType::Amp,
+            ],
             WithNewlines::One,
         ) {
             let op_token = self.previous().cloned().ok_or_else(|| self.eof_err())?;
@@ -771,6 +775,13 @@ impl Parser {
             let op = match op_token.token_type {
                 token::TokenType::Bang => (ast::UnaryOp::Not, op_token),
                 token::TokenType::Minus => (ast::UnaryOp::Minus, op_token),
+                token::TokenType::Amp => {
+                    if self.match_any(&[token::TokenType::Mut], WithNewlines::None) {
+                        (ast::UnaryOp::Ref(ast::RefType::Mut), op_token)
+                    } else {
+                        (ast::UnaryOp::Ref(ast::RefType::Shared), op_token)
+                    }
+                }
 
                 _ => {
                     return Err(self.error(
