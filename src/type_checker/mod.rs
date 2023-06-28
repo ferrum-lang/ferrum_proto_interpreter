@@ -507,6 +507,14 @@ impl<'a> ast::ExprVisitor<TypeResult> for TypeChecker<'a> {
                         });
                     }
                 }
+
+                if mutates {
+                    if let Some(ast::FnMod::Pure) = &function.known_fn_mod {
+                        return Err(TypeError::TypeMismatch {
+                            details: Some(format!("Pure fns cannot mutate!")),
+                        });
+                    }
+                }
             }
         }
 
@@ -658,14 +666,6 @@ impl<'a> ast::ExprVisitor<TypeResult> for TypeChecker<'a> {
 
             _ => {}
         };
-
-        if mutates {
-            if let Some(ast::FnMod::Pure) = &self.known_fn_mod {
-                self.error_ctx.type_error(TypeError::TypeMismatch {
-                    details: Some(format!("Pure fns cannot mutate!")),
-                });
-            }
-        }
 
         let ret = match callable {
             CallableTypeInfo::Function(FunctionTypeInfo { ret: Some(ret), .. }) => *ret,

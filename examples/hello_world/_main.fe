@@ -12,8 +12,11 @@ pub fn main()
 
 	print("Hello {age} year old named {name}!")
 
-	test_pure()
-	test_safe()
+	print(test_pure())
+
+	mut name = "Adam"
+	test_safe(&mut name)
+
 	test_unknown()
 
 	const name = get_name()
@@ -23,17 +26,27 @@ pub fn main()
 	print("all good")
 ;
 
-pure fn test_pure()
+pure fn test_pure(): String
+	mut created = "tmp"
+	
 	// this is ok because no external data gets mutated
-	test_safe()
+	test_safe(&mut created)
+
+	return created
 ;
 
-safe fn test_safe()
+safe fn test_safe(msg: &mut String)
 	// `test_unknown3` calls `print` which is `norm`
 	// thus all the calls up that stack require at least `norm`
 	// since `test_safe` is `safe`, the below call will fail to compile
 
 	// test_unknown()
+
+	// // // // //
+
+	// writing to mut ref doesn't actually work yet ...
+	// interpreter doesn't handle refs properly, just copies the data
+	msg = "overwritten"
 ;
 
 fn test_unknown()
