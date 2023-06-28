@@ -4,7 +4,7 @@ use type_info::*;
 
 use super::*;
 
-use crate::ast::{self, DeclAccept, ExprAccept, StmtAccept};
+use crate::ast::{self, DeclAccept, ExprAccept, ExprVisitor, StmtAccept};
 use crate::environment as env;
 use crate::resolver;
 
@@ -187,7 +187,13 @@ impl<'a> TypeChecker<'a> {
             return true;
         }
 
-        return val == dest;
+        if let TypeInfo::Ref(RefType { is_mut: true, of }) = dest {
+            let TypeInfo::Ref(_) = val else {
+                return *val == **of;
+            };
+        }
+
+        return *val == *dest;
     }
 
     fn look_up_variable(&self, name: &token::Token, id: &ast::Id) -> TypeResult {
@@ -294,6 +300,14 @@ impl<'a> ast::DeclVisitor<TypeResult<()>> for TypeChecker<'a> {
         for param in &decl.params {
             let type_info = Box::new(self.type_ref(&param.type_ref)?);
 
+            if let TypeInfo::Ref(RefType { is_mut: true, .. }) = &*type_info {
+                if let Some(ast::FnMod::Pure) = &known_fn_mod {
+                    return Err(TypeError::TypeMismatch {
+                        details: Some(format!("Pure fns cannot accept mutable references")),
+                    });
+                }
+            }
+
             let param_type = FnParamTypeInfo {
                 name: param.name.lexeme.clone(),
                 type_info,
@@ -356,15 +370,45 @@ impl<'a> ast::StmtVisitor<TypeResult<()>> for TypeChecker<'a> {
             ast::AssignmentLHS::Var(v) => {
                 let prev = self.look_up_variable(&v.name, &v.id)?;
 
-                if self.is_compatible(&next, &prev) {
-                    self.define_var(v, next)?;
-                } else {
-                    self.error_ctx.type_error(TypeError::TypeMismatch {
-                        details: Some(format!(
-                            "Cannot assign {:?} of type {next:?} to {:?} of type {prev:?}.",
-                            stmt.value, v.name
-                        )),
-                    });
+                match &stmt.op.0 {
+                    ast::AssignOp::Equal => {
+                        if self.is_compatible(&next, &prev) {
+                            self.define_var(v, next)?;
+                        } else {
+                            self.error_ctx.type_error(TypeError::TypeMismatch {
+                                details: Some(format!(
+                                    "Cannot assign {:?} of type {next:?} to {:?} of type {prev:?}.",
+                                    stmt.value, v.name
+                                )),
+                            });
+                        }
+                    }
+                    ast::AssignOp::PlusEqual => {
+                        let next = self.visit_binary_expr(&ast::BinaryExpr {
+                            id: ast::Id::MAX,
+                            left: Box::new(ast::Expr::Identity(v.clone())),
+                            right: Box::new(stmt.value.clone()),
+                            op: (
+                                ast::BinaryOp::Plus,
+                                token::Token {
+                                    token_type: token::TokenType::Plus,
+                                    lexeme: "+".to_string(),
+                                    span: Span::new(),
+                                },
+                            ),
+                        })?;
+
+                        if self.is_compatible(&next, &prev) {
+                            self.define_var(v, next)?;
+                        } else {
+                            self.error_ctx.type_error(TypeError::TypeMismatch {
+                                details: Some(format!(
+                                    "Cannot add-assign {:?} of type {next:?} to {:?} of type {prev:?}.",
+                                    stmt.value, v.name
+                                )),
+                            });
+                        }
+                    }
                 }
             }
             ast::AssignmentLHS::Get(g) => {
@@ -402,8 +446,18 @@ impl<'a> ast::ExprVisitor<TypeResult> for TypeChecker<'a> {
             return Ok(callee);
         }
 
+        let mut mutates = false;
+
         let mut arguments = Vec::with_capacity(expr.arguments.len());
         for arg in &expr.arguments {
+            if let ast::Expr::Unary(ast::UnaryExpr {
+                op: (ast::UnaryOp::Ref(ast::RefType::Mut), _),
+                ..
+            }) = &arg
+            {
+                mutates = true;
+            }
+
             arguments.push(self.evaluate(arg)?);
         }
 
@@ -439,6 +493,10 @@ impl<'a> ast::ExprVisitor<TypeResult> for TypeChecker<'a> {
         match &callable {
             CallableTypeInfo::Function(function) => {
                 for (idx, param) in function.params.iter().enumerate() {
+                    if let TypeInfo::Ref(RefType { is_mut: true, .. }) = &*param.type_info {
+                        mutates = true;
+                    }
+
                     let arg = &arguments[idx];
 
                     if !self.is_compatible(arg, &param.type_info) {
@@ -600,6 +658,14 @@ impl<'a> ast::ExprVisitor<TypeResult> for TypeChecker<'a> {
 
             _ => {}
         };
+
+        if mutates {
+            if let Some(ast::FnMod::Pure) = &self.known_fn_mod {
+                self.error_ctx.type_error(TypeError::TypeMismatch {
+                    details: Some(format!("Pure fns cannot mutate!")),
+                });
+            }
+        }
 
         let ret = match callable {
             CallableTypeInfo::Function(FunctionTypeInfo { ret: Some(ret), .. }) => *ret,

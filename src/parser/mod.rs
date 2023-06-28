@@ -278,7 +278,7 @@ impl Parser {
 
                 params.push(ast::FnParam { name, type_ref });
 
-                return Ok(self.match_any(&[token::TokenType::Comma], WithNewlines::Many));
+                return Ok(!self.match_any(&[token::TokenType::Comma], WithNewlines::Many));
             };
 
             match try_parse_field(&mut params) {

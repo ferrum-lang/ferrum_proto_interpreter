@@ -8,7 +8,7 @@ pub fn main()
 	
 	print("Hello {age} year old named {name}!")
 
-	age = age + 1
+	age += 1
 
 	print("Hello {age} year old named {name}!")
 

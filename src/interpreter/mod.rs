@@ -140,6 +140,31 @@ impl Interpreter {
 
         return None;
     }
+
+    fn add(&self, left: rt::RuntimeValue, right: rt::RuntimeValue) -> rt::RuntimeResult {
+        match (left, right) {
+            (rt::RuntimeValue::Number(left), rt::RuntimeValue::Number(right)) => {
+                return Ok(rt::RuntimeValue::Number(left + right));
+            }
+            (rt::RuntimeValue::String(left), rt::RuntimeValue::String(right)) => {
+                let mut res = left.to_string();
+                res.push_str(&right);
+                return Ok(rt::RuntimeValue::String(res.into()));
+            }
+            (left, right) => {
+                return Err(rt::RuntimeError::InvalidBinaryExpr {
+                    left,
+                    right,
+                    op: ast::BinaryOp::Plus,
+                    details: Some(format!(
+                        "[{}:{}] Can only add 2 strings or 2 numbers.",
+                        file!(),
+                        line!()
+                    )),
+                });
+            }
+        }
+    }
 }
 
 impl DeclVisitor<rt::RuntimeResult<()>> for Interpreter {
@@ -295,8 +320,19 @@ impl StmtVisitor<rt::RuntimeResult<()>> for Interpreter {
                     return Err(rt::RuntimeError::UndefinedVariable { name: v.name.clone(), details: None });
                 };
 
-                self.environment
-                    .assign_at(*distance, v.name.clone(), value)?;
+                match &stmt.op.0 {
+                    ast::AssignOp::Equal => {
+                        self.environment
+                            .assign_at(*distance, v.name.clone(), value)?;
+                    }
+                    ast::AssignOp::PlusEqual => {
+                        let prev = self.environment.get_at(*distance, &v.name)?;
+                        let next = self.add(prev, value)?;
+
+                        self.environment
+                            .assign_at(*distance, v.name.clone(), next)?;
+                    }
+                }
             }
             ast::AssignmentLHS::Get(_) => unimplemented!(),
         }
@@ -436,35 +472,18 @@ impl ExprVisitor<rt::RuntimeResult> for Interpreter {
         let right = self.evaluate(&expr.right)?;
 
         match &expr.op.0 {
-            ast::BinaryOp::Plus => match (left, right) {
-                (rt::RuntimeValue::Number(left), rt::RuntimeValue::Number(right)) => {
-                    return Ok(rt::RuntimeValue::Number(left + right));
-                }
-                (rt::RuntimeValue::String(left), rt::RuntimeValue::String(right)) => {
-                    let mut res = left.to_string();
-                    res.push_str(&right);
-                    return Ok(rt::RuntimeValue::String(res.into()));
-                }
-                (_left, _right) => {
-                    return Err(rt::RuntimeError::InvalidBinaryExpr {
-                        expr: expr.clone(),
-                        details: Some(format!(
-                            "[{}:{}] Can only add 2 strings or 2 numbers.",
-                            file!(),
-                            line!()
-                        )),
-                    });
-                }
-            },
+            ast::BinaryOp::Plus => return self.add(left, right),
 
             // ast::BinaryOp::EqualEqual => {
             //     Ok(rt::RuntimeValue::Boolean(self.is_equal(&left, &right)))
             // }
             // ast::BinaryOp::NotEqual => Ok(rt::RuntimeValue::Boolean(!self.is_equal(&left, &right))),
             op => {
-                let rt::RuntimeValue::Number(left) = left else {
+                let rt::RuntimeValue::Number(left_val) = left else {
                     return Err(rt::RuntimeError::InvalidBinaryExpr {
-                        expr: expr.clone(),
+                        left,
+                        right,
+                        op: op.clone(),
                         details: Some(format!(
                             "[{}:{}] Expected left operand to be a number.",
                             file!(),
@@ -473,9 +492,11 @@ impl ExprVisitor<rt::RuntimeResult> for Interpreter {
                     });
                 };
 
-                let rt::RuntimeValue::Number(right) = right else {
+                let rt::RuntimeValue::Number(right_val) = right else {
                     return Err(rt::RuntimeError::InvalidBinaryExpr {
-                        expr: expr.clone(),
+                        left,
+                        right,
+                        op: op.clone(),
                         details: Some(format!(
                             "[{}:{}] Expected right operand to be a number.",
                             file!(),
@@ -489,15 +510,15 @@ impl ExprVisitor<rt::RuntimeResult> for Interpreter {
                         unreachable!()
                     }
 
-                    ast::BinaryOp::Greater => rt::RuntimeValue::Boolean(left > right),
-                    ast::BinaryOp::GreaterEqual => rt::RuntimeValue::Boolean(left >= right),
-                    ast::BinaryOp::Less => rt::RuntimeValue::Boolean(left < right),
-                    ast::BinaryOp::LessEqual => rt::RuntimeValue::Boolean(left <= right),
+                    ast::BinaryOp::Greater => rt::RuntimeValue::Boolean(left_val > right_val),
+                    ast::BinaryOp::GreaterEqual => rt::RuntimeValue::Boolean(left_val >= right_val),
+                    ast::BinaryOp::Less => rt::RuntimeValue::Boolean(left_val < right_val),
+                    ast::BinaryOp::LessEqual => rt::RuntimeValue::Boolean(left_val <= right_val),
 
-                    ast::BinaryOp::Minus => rt::RuntimeValue::Number(left - right),
-                    ast::BinaryOp::Divide => rt::RuntimeValue::Number(left / right),
-                    ast::BinaryOp::Times => rt::RuntimeValue::Number(left * right),
-                    ast::BinaryOp::Modulo => rt::RuntimeValue::Number(left % right),
+                    ast::BinaryOp::Minus => rt::RuntimeValue::Number(left_val - right_val),
+                    ast::BinaryOp::Divide => rt::RuntimeValue::Number(left_val / right_val),
+                    ast::BinaryOp::Times => rt::RuntimeValue::Number(left_val * right_val),
+                    ast::BinaryOp::Modulo => rt::RuntimeValue::Number(left_val % right_val),
 
                     op => todo!("Handle {op:?}"),
                 });

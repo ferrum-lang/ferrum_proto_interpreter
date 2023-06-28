@@ -95,9 +95,11 @@ pub enum RuntimeError {
         details: Option<String>,
     },
 
-    #[error("invalid binary expression: {expr:#?}. Details = {details:?}")]
+    #[error("invalid binary expression: {left:?} {op:?} {right:?}. Details = {details:?}")]
     InvalidBinaryExpr {
-        expr: ast::BinaryExpr,
+        left: RuntimeValue,
+        right: RuntimeValue,
+        op: ast::BinaryOp,
         details: Option<String>,
     },
 
